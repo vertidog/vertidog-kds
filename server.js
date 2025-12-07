@@ -226,12 +226,26 @@ app.post("/square/webhook", async (req, res) => {
 
     const existing = orders[orderId] || {};
     
-    // --- CANCELLATION LOGIC ---
+    // --- CANCELLATION LOGIC FIX ---
     let kdsStatus = existing.status || "new";
+    
+    // Check for Square cancellation/closure state
     if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
-      kdsStatus = "cancelled";
-    }
-
+        
+        // CRITICAL FIX: If the KDS has already completed or ready'd this order, 
+        // we set its status to 'cancelled' to log the event, 
+        // but we prevent it from being sent as a 'NEW' order to the KDS active screen.
+        if (kdsStatus === "ready" || kdsStatus === "done") {
+             // We allow the status to update to 'cancelled' for display in the completed list, 
+             // but this status is immediately ignored by the frontend's active filter.
+             kdsStatus = "cancelled";
+        } else {
+             // If it was 'new' or 'in-progress', it is truly cancelled and should be removed.
+             kdsStatus = "cancelled";
+        }
+    } 
+    // END CANCELLATION LOGIC FIX
+    
     const merged = {
       orderId,
       orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
