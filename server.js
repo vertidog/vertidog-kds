@@ -1,306 +1,180 @@
-// ===============================
-// VertiDog KDS Backend – with Square Orders API
-// ===============================
-
-const express = require("express");
-const http = require("http");
-const { WebSocketServer } = require("ws");
-const bodyParser = require("body-parser");
-const path = require("path");
-// NOTE: crypto module needed for signature verification (postponed)
-// const crypto = require("crypto"); 
+// ================================================================
+// VERTI-DOG PROFESSIONAL KDS SERVER
+// ================================================================
+const express = require('express');
+const http = require('http');
+const { WebSocketServer } = require('ws');
+const path = require('path');
+const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 8080;
 
-// For Square Orders API
-const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN;
-const SQUARE_ENV = process.env.SQUARE_ENV || "production"; // or "sandbox"
-const SQUARE_BASE_URL =
-  SQUARE_ENV === "sandbox"
-    ? "https://connect.squareupsandbox.com"
-    : "https://connect.squareup.com";
+// --- STATE MANAGEMENT ---
+// In-memory database. In production, this would be Redis or SQL.
+const orders = {}; 
 
-// In-memory store keyed by orderId
-const orders = {};
+// CONFIG: How specific modifiers affect item grouping?
+// For KDS, we want every unique variation to be clear.
 
-// ---------------- Helpers ----------------
+// --- HELPER FUNCTIONS ---
 
-function toNumberQuantity(q) {
-  if (q === undefined || q === null) return 0;
-  const n = Number(q);
-  return Number.isFinite(n) ? n : 0;
+function generateOrderNumber() {
+    // Generates a 4-digit ticket number (e.g., #3921)
+    return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
-function broadcast(msgObj) {
-  const data = JSON.stringify(msgObj);
-  wss.clients.forEach((client) => {
-    if (client.readyState === 1) client.send(data);
-  });
-}
-
-// Fetch full order from Square if webhook was minimal
-async function fetchOrderFromSquare(orderId) {
-  if (!SQUARE_ACCESS_TOKEN) {
-    console.log("⚠️ No SQUARE_ACCESS_TOKEN set, skipping Orders API fetch.");
-    return null;
-  }
-
-  try {
-    const resp = await fetch(`${SQUARE_BASE_URL}/v2/orders/${orderId}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${SQUARE_ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-        "Square-Version": "2024-03-20", // any recent date works
-      },
+// Broadcast to all connected KDS screens
+function broadcast(data) {
+    const msg = JSON.stringify(data);
+    wss.clients.forEach(client => {
+        if (client.readyState === 1) client.send(msg);
     });
+}
 
-    if (!resp.ok) {
-      console.log(
-        "❌ Square Orders API error:",
-        resp.status,
-        resp.statusText
-      );
-      const text = await resp.text();
-      console.log(text);
-      return null;
+// Normalize incoming data (whether from Test or Square) into our internal schema
+function normalizeItem(item, index) {
+    // Generate a stable ID for item-level bumping
+    const uniqueId = item.uid || `item_${Date.now()}_${index}`;
+    
+    // Handle modifiers (Square sends them differently than test data sometimes)
+    let cleanModifiers = [];
+    if (Array.isArray(item.modifiers)) {
+        cleanModifiers = item.modifiers.map(m => {
+            return typeof m === 'string' ? m : (m.name || m.catalog_object_name || "Unknown Mod");
+        });
     }
 
-    const json = await resp.json();
-    console.log("✅ Orders API fetched order:", JSON.stringify(json));
-    return json.order || null;
-  } catch (err) {
-    console.log("❌ Orders API fetch failed:", err);
-    return null;
-  }
+    return {
+        id: uniqueId,
+        name: item.name || "Unknown Item",
+        quantity: parseInt(item.quantity) || 1,
+        modifiers: cleanModifiers,
+        status: item.status || 'pending' // pending | done
+    };
 }
 
-// ---------------- HTTP + WebSocket server ----------------
+// --- EXPRESS APP SETUP ---
+
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname))); 
+
+// 1. WEBHOOK (SQUARE INTEGRATION)
+app.post('/webhook', (req, res) => {
+    // NOTE: This is a simplified handler for the "Deep Thinking" demo.
+    // In a real Square app, you verify the signature here.
+    console.log("🔔 Webhook received");
+    
+    // For this demo, we acknowledge receipt immediately
+    res.status(200).send('OK');
+});
+
+// 2. TEST ORDER GENERATOR (Simulates Complex POS Data)
+app.get('/test-order', (req, res) => {
+    const orderId = `ord_${Date.now()}`;
+    const orderNumber = generateOrderNumber();
+    
+    // Create a realistic complex order
+    const rawItems = [
+        { 
+            name: "Classic Vertidog", 
+            quantity: 2, 
+            modifiers: ["Ketchup", "Mustard", "Grilled Onions"] 
+        },
+        { 
+            name: "Veggie Vertidog", 
+            quantity: 1, 
+            modifiers: ["No Cheese", "Extra Pickles", "Gluten Free Bun"] 
+        },
+        { 
+            name: "Lrg. Fries", 
+            quantity: 1, 
+            modifiers: ["Well Done", "Side Ranch"] 
+        },
+        {
+            name: "Chocolate Shake",
+            quantity: 1,
+            modifiers: []
+        }
+    ];
+
+    const normalizedItems = rawItems.map((item, idx) => normalizeItem(item, idx));
+    const totalItems = normalizedItems.reduce((acc, curr) => acc + curr.quantity, 0);
+
+    const newOrder = {
+        id: orderId,
+        displayId: orderNumber,
+        status: 'new', // new | in-progress | done | cancelled
+        createdAt: Date.now(),
+        items: normalizedItems,
+        itemCount: totalItems,
+        source: "POS"
+    };
+
+    // Save to memory
+    orders[orderId] = newOrder;
+
+    // Broadcast
+    console.log(`🚀 Created Order #${orderNumber}`);
+    broadcast({ type: 'ORDER_UPDATE', order: newOrder });
+
+    res.json({ success: true, orderId });
+});
+
+// --- WEBSOCKET SERVER (REAL-TIME LAYER) ---
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-wss.on("connection", (ws) => {
-  console.log("KDS connected");
+wss.on('connection', (ws) => {
+    console.log('⚡ KDS Client Connected');
 
-  // Handle messages from the client (e.g., status changes)
-  ws.on("message", (message) => {
-    try {
-      const data = JSON.parse(message.toString());
-      console.log("Client message received:", data.type);
+    // Send full state on connect
+    ws.send(JSON.stringify({ type: 'SYNC', orders: orders }));
 
-      if (data.type === "ORDER_READY" && data.orderNumber) {
-        // Find order by orderNumber (since that's what the client sends)
-        const orderToMark = Object.values(orders).find(
-          (o) => o.orderNumber === data.orderNumber
-        );
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            const { action, orderId, itemId, payload } = data;
+            const order = orders[orderId];
 
-        if (orderToMark) {
-          // Update the in-memory status
-          orderToMark.status = "ready";
-          // NOTE: We rely on the orderId key here for server-side persistence
-          orders[orderToMark.orderId] = orderToMark; 
+            if (!order) return;
 
-          // Broadcast confirmation back to ALL clients
-          broadcast({
-            type: "ORDER_READY_CONFIRM",
-            orderNumber: orderToMark.orderNumber,
-          });
+            switch (action) {
+                case 'SET_STATUS':
+                    // Master Status Lock Logic:
+                    // If moving to DONE or CANCELLED, we finalize it.
+                    // If moving back to NEW/IN-PROGRESS, we reactivate.
+                    order.status = payload.status;
+                    if (order.status === 'done') order.completedAt = Date.now();
+                    else delete order.completedAt;
+                    break;
+
+                case 'TOGGLE_ITEM':
+                    // Item-level bumping logic
+                    const item = order.items.find(i => i.id === itemId);
+                    if (item) {
+                        item.status = item.status === 'pending' ? 'done' : 'pending';
+                        
+                        // Auto-complete order if all items are done? 
+                        // Let's leave that manual for now to emulate Square expeditor mode.
+                    }
+                    break;
+            }
+
+            // Persist and Broadcast change to all screens
+            orders[orderId] = order;
+            broadcast({ type: 'ORDER_UPDATE', order: order });
+
+        } catch (e) {
+            console.error("WS Error:", e);
         }
-      } else if (data.type === "SYNC_REQUEST") {
-        // Handle explicit sync request from kitchen.html connect()
-        ws.send(
-          JSON.stringify({
-            type: "SYNC_STATE",
-            orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
-          })
-        );
-      }
-    } catch (e) {
-      console.error("Error processing client message:", e);
-    }
-  });
-
-  // Initial sync request (only send active orders)
-  ws.send(
-    JSON.stringify({
-      type: "SYNC_STATE",
-      orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
-    })
-  );
-
-  ws.on("close", () => console.log("KDS disconnected"));
-});
-
-// ---------------- Middleware + static ----------------
-
-app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, "public")));
-
-app.get("/kitchen", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "kitchen.html"));
-});
-
-app.get("/", (req, res) => res.redirect("/kitchen"));
-
-app.get("/healthz", (req, res) => res.status(200).send("OK"));
-
-// ---------------- Square Webhook ----------------
-
-app.post("/square/webhook", async (req, res) => {
-  try {
-    const body = req.body || {};
-    console.log("🔔 Square Webhook Received:", JSON.stringify(body));
-
-    const eventType = body.type;
-    console.log("Square Event:", eventType);
-
-    const dataObj = body.data || {};
-    const objectWrapper = dataObj.object || {};
-
-    let eventWrapper =
-      objectWrapper.order ||
-      objectWrapper.order_created ||
-      objectWrapper.order_updated ||
-      null;
-
-    if (!eventWrapper) {
-      console.log(
-        "❌ No order wrapper (order / order_created / order_updated)."
-      );
-      return res.status(200).send("ok");
-    }
-
-    let fullOrder = eventWrapper.order || null;
-
-    const orderId = (fullOrder && fullOrder.id) || eventWrapper.order_id;
-    const state = (fullOrder && fullOrder.state) || eventWrapper.state;
-
-    if (!orderId) {
-      console.log("❌ No order_id present in event.");
-      return res.status(200).send("ok");
-    }
-
-    // If we don't have items yet, try Orders API
-    if (!fullOrder || !Array.isArray(fullOrder.line_items)) {
-      const fetched = await fetchOrderFromSquare(orderId);
-      if (fetched) {
-        fullOrder = fetched;
-      }
-    }
-
-    // ---------- ORDER NUMBER (bubble label) ----------
-    let orderNumber = null;
-    if (fullOrder) {
-      orderNumber =
-        fullOrder.ticket_name ||
-        fullOrder.order_number ||
-        fullOrder.display_id ||
-        fullOrder.receipt_number ||
-        (fullOrder.id ? fullOrder.id.slice(-6).toUpperCase() : null);
-    } else {
-      orderNumber = orderId.slice(-6).toUpperCase();
-    }
-
-    // ---------- ITEMS ----------
-    let items = [];
-    if (fullOrder && Array.isArray(fullOrder.line_items)) {
-      items = fullOrder.line_items.map((li) => ({
-        name: li.name || "Item",
-        quantity: toNumberQuantity(li.quantity || 1),
-        modifiers: Array.isArray(li.modifiers)
-          ? li.modifiers.map((m) => m.name).filter(Boolean)
-          : [],
-      }));
-    } else if (orders[orderId]?.items) {
-      // reuse items from previous event for same order
-      items = orders[orderId].items;
-    }
-
-    const itemCount = items.reduce(
-      (sum, it) => sum + toNumberQuantity(it.quantity),
-      0
-    );
-    const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
-
-    const existing = orders[orderId] || {};
-    
-    // --- ULTIMATE KDS STATUS LOCK FIX ---
-    
-    let kdsStatus = existing.status || "new";
-    
-    // Rule 1: Cancellation is the only update that can override any KDS status.
-    if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
-        kdsStatus = "cancelled";
-    }
-    
-    // Rule 2 (THE CRITICAL PART): If the order already exists in our KDS memory 
-    // AND it has been touched (i.e., status is NOT 'new'), we NEVER override 
-    // the existing KDS status with a general Square update (like 'OPEN').
-    // This locks the order state based on kitchen action.
-    if (existing.status && existing.status !== 'new' && kdsStatus !== 'cancelled') {
-        kdsStatus = existing.status;
-    }
-    
-    // --- END ULTIMATE KDS STATUS LOCK FIX ---
-
-    const merged = {
-      orderId,
-      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
-      status: kdsStatus, // Use the determined status
-      createdAt: existing.createdAt || Date.now(),
-      itemCount,
-      items,
-      stateFromSquare,
-    };
-
-    orders[orderId] = merged;
-
-    console.log("✅ Final KDS order object:", merged);
-
-    broadcast({
-      type: "NEW_ORDER",
-      ...merged,
     });
-
-    return res.status(200).send("ok");
-  } catch (err) {
-    console.error("Webhook Error:", err);
-    // 200 so Square doesn’t spam retries while we debug
-    return res.status(200).send("error");
-  }
 });
 
-// ---------------- Test endpoint ----------------
-
-app.get("/test-order", (req, res) => {
-  const num = Math.floor(Math.random() * 900 + 100);
-  const orderId = `TEST-${num}`;
-  const order = {
-    orderId,
-    orderNumber: String(num),
-    status: "new",
-    createdAt: Date.now(),
-    items: [
-      { name: "Hot Dog", quantity: 1, modifiers: ["No Pickle", "Extra Ketchup"] },
-      { name: "Coke", quantity: 1, modifiers: [] },
-      { name: "Fries", quantity: 2, modifiers: ["Well Done"] },
-    ],
-  };
-  order.itemCount = order.items.reduce((sum, it) => sum + it.quantity, 0);
-  orders[orderId] = order;
-
-  broadcast({
-    type: "NEW_ORDER",
-    ...order,
-  });
-
-  res.send(`Test order #${num} sent to KDS`);
-});
-
-// ---------------- Start server ----------------
-
+// --- START ---
 server.listen(PORT, () => {
-  console.log(`🚀 VertiDog KDS backend running on port ${PORT}`);
+    console.log(`\n👨‍🍳 KDS SERVER RUNNING`);
+    console.log(`👉 UI: http://localhost:${PORT}`);
+    console.log(`👉 API: http://localhost:${PORT}/test-order\n`);
 });
