@@ -573,8 +573,8 @@
           (msg.orders || []).forEach((o) =>
             addOrUpdate(o.orderNumber, o.status || "new", o)
           );
-          if (!selectedOrderNumber && (msg.orders || []).length > 0) {
-            selectedOrderNumber = msg.orders[0].orderNumber;
+          if (!selectedOrderNumber && (Object.values(orders).length > 0)) {
+            selectedOrderNumber = Object.values(orders).sort((a,b) => a.createdAt - b.createdAt)[0].orderNumber;
           }
           break;
 
@@ -595,7 +595,6 @@
         const orderNumber = event.target.dataset.order;
         event.dataTransfer.setData('text/plain', orderNumber);
         event.target.classList.add('dragging');
-        // We no longer need to disable/re-enable the click handler here.
     }
 
     // Clean up after the drag ends
@@ -630,7 +629,7 @@
         if (targetType === 'active') {
             // Dragged to main screen -> Must become ACTIVE ('in-progress')
             orders[orderNumber].status = 'in-progress';
-            // We should also inform the server to unlock the status if it was locked as 'done' or 'cancelled'
+            // Inform server to unlock the status and reactivate
             sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
         } else if (targetType === 'done') {
             // Dragged to completed section -> Must become DONE
