@@ -7,6 +7,8 @@ const http = require("http");
 const { WebSocketServer } = require("ws");
 const bodyParser = require("body-parser");
 const path = require("path");
+// NOTE: crypto module needed for signature verification (postponed)
+// const crypto = require("crypto"); 
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -82,11 +84,48 @@ const wss = new WebSocketServer({ server });
 wss.on("connection", (ws) => {
   console.log("KDS connected");
 
-  // send current state on connect
+  // Handle messages from the client (e.g., status changes)
+  ws.on("message", (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      console.log("Client message received:", data.type);
+
+      if (data.type === "ORDER_READY" && data.orderNumber) {
+        // Logic for a cook marking an order as ready
+        const orderToMark = Object.values(orders).find(
+          (o) => o.orderNumber === data.orderNumber
+        );
+
+        if (orderToMark) {
+          // Update the in-memory status
+          orderToMark.status = "ready";
+          orders[orderToMark.orderId] = orderToMark;
+
+          // Broadcast confirmation back to ALL clients
+          broadcast({
+            type: "ORDER_READY_CONFIRM",
+            orderNumber: orderToMark.orderNumber,
+          });
+        }
+      } else if (data.type === "SYNC_REQUEST") {
+        // Handle explicit sync request from kitchen.html connect()
+        ws.send(
+          JSON.stringify({
+            type: "SYNC_STATE",
+            orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
+          })
+        );
+      }
+    } catch (e) {
+      console.error("Error processing client message:", e);
+    }
+  });
+
+  // Initial sync request (only send active orders)
   ws.send(
     JSON.stringify({
-      type: "SYNC",
-      orders,
+      type: "SYNC_STATE",
+      orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
     })
   );
 
@@ -119,10 +158,6 @@ app.post("/square/webhook", async (req, res) => {
     const dataObj = body.data || {};
     const objectWrapper = dataObj.object || {};
 
-    // eventWrapper might be:
-    // - { order: { ... } }
-    // - { order_created: { order, order_id, state } }
-    // - { order_updated: { order, order_id, state } }
     let eventWrapper =
       objectWrapper.order ||
       objectWrapper.order_created ||
@@ -136,10 +171,8 @@ app.post("/square/webhook", async (req, res) => {
       return res.status(200).send("ok");
     }
 
-    // fullOrder only exists if webhook carried the full resource
     let fullOrder = eventWrapper.order || null;
 
-    // orderId / state appear even in minimal events
     const orderId = (fullOrder && fullOrder.id) || eventWrapper.order_id;
     const state = (fullOrder && fullOrder.state) || eventWrapper.state;
 
@@ -191,10 +224,17 @@ app.post("/square/webhook", async (req, res) => {
     const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
 
     const existing = orders[orderId] || {};
+    
+    // --- CANCELLATION LOGIC IMPLEMENTED ---
+    let kdsStatus = existing.status || "new";
+    if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
+      kdsStatus = "cancelled";
+    }
+
     const merged = {
       orderId,
       orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
-      status: existing.status || "new", // kitchen taps control this
+      status: kdsStatus, // Use the determined status
       createdAt: existing.createdAt || Date.now(),
       itemCount,
       items,
@@ -229,11 +269,12 @@ app.get("/test-order", (req, res) => {
     status: "new",
     createdAt: Date.now(),
     items: [
-      { name: "Hot Dog", quantity: 1, modifiers: [] },
+      { name: "Hot Dog", quantity: 1, modifiers: ["No Pickle", "Extra Ketchup"] },
       { name: "Coke", quantity: 1, modifiers: [] },
+      { name: "Fries", quantity: 2, modifiers: ["Well Done"] },
     ],
   };
-  order.itemCount = order.items.length;
+  order.itemCount = order.items.reduce((sum, it) => sum + it.quantity, 0);
   orders[orderId] = order;
 
   broadcast({
