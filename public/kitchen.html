@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>VertiDog Kitchen Screen</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #050816;
+      --card-bg: #0b1020;
+      --new: #3b82f6;
+      --progress: #f97316;
+      --ready: #22c55e;
+      --text: #e5e7eb;
+      --muted: #6b7280;
+      --accent: #a855f7;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at top, #111827 0, #020617 50%, #000 100%);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(15, 23, 42, 0.9);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+    header .title {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+    header h1 {
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 0;
+      color: var(--accent);
+    }
+    header .subtitle {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    header .status-pill {
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #bbf7d0;
+    }
+    header .dot {
+      width: 0.4rem;
+      height: 0.4rem;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+    }
+
+    /* Layout: bubbles on left, details on right */
+    .layout {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+    .left-pane {
+      flex: 2.2;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    main {
+      flex: 1;
+      padding: 0.75rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .bubble {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 999px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: 2px solid transparent;
+      box-shadow:
+        0 10px 25px rgba(0, 0, 0, 0.5),
+        0 0 20px rgba(59, 130, 246, 0.2);
+      transition:
+        transform 0.1s ease-out,
+        box-shadow 0.2s ease-out,
+        background 0.2s ease-out,
+        border-color 0.2s ease-out,
+        opacity 0.3s ease-out;
+      user-select: none;
+      touch-action: manipulation;
+      padding: 0.3rem;
+      text-align: center;
+    }
+    .bubble:active {
+      transform: scale(0.96);
+    }
+    .bubble-number {
+      font-size: 1.7rem;
+      font-weight: 800;
+    }
+    .bubble-meta {
+      margin-top: 0.2rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .bubble-status {
+      position: absolute;
+      bottom: 0.35rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.65rem;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      color: rgba(209, 213, 219, 0.9);
+    }
+    .bubble.new {
+      background: radial-gradient(circle at 30% 0%, rgba(59, 130, 246, 0.75), rgba(15, 23, 42, 0.95));
+      border-color: rgba(59, 130, 246, 0.75);
+    }
+    .bubble.in-progress {
+      background: radial-gradient(circle at 30% 0%, rgba(249, 115, 22, 0.8), rgba(15, 23, 42, 0.95));
+      border-color: rgba(249, 115, 22, 0.85);
+    }
+    .bubble.ready {
+      background: radial-gradient(circle at 30% 0%, rgba(34, 197, 94, 0.8), rgba(15, 23, 42, 0.95));
+      border-color: rgba(34, 197, 94, 0.85);
+    }
+    .bubble.done {
+      background: #111827;
+      border-color: #374151;
+      box-shadow: none;
+      opacity: 0.6;
+      transform: scale(0.85);
+    }
+    .bubble.done .bubble-number {
+      font-size: 1.1rem;
+    }
+
+    .bubble.selected {
+      box-shadow:
+        0 0 0 2px rgba(168, 85, 247, 0.9),
+        0 10px 25px rgba(0, 0, 0, 0.6);
+      border-color: rgba(168, 85, 247, 0.9);
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      color: var(--muted);
+      gap: 0.4rem;
+      opacity: 0.8;
+      text-align: center;
+    }
+
+    /* Completed section */
+    #completed-section {
+      padding: 0.25rem 0.75rem 0.75rem;
+      border-top: 1px solid rgba(15, 23, 42, 0.9);
+    }
+    .completed-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+    }
+    .completed-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: 0.4rem;
+    }
+
+    /* Details panel */
+    .details-panel {
+      flex: 1;
+      border-left: 1px solid rgba(148, 163, 184, 0.25);
+      padding: 0.75rem;
+      background: radial-gradient(circle at top, #020617, #020617 60%, #000 100%);
+      font-size: 0.85rem;
+      min-width: 220px;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+    }
+    .details-panel-empty {
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+    .details-order-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      font-size: 0.95rem;
+    }
+    .details-meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .details-items-title {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+    .details-items {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .details-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.3rem;
+    }
+    .details-item-name {
+      color: var(--text);
+    }
+    .details-item-qty {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        flex-direction: column;
+      }
+      .details-panel {
+        max-width: none;
+        border-left: none;
+        border-top: 1px solid rgba(148, 163, 184, 0.25);
+        min-height: 140px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>VERTIDOG KITCHEN</h1>
+      <span class="subtitle">Tap bubbles to advance: NEW → IN PROGRESS → READY</span>
+    </div>
+    <div class="status-pill" id="connection-status">
+      <span class="dot"></span>
+      <span>Connecting…</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="left-pane">
+      <main id="bubble-container">
+        <div class="empty-state" id="empty-state">
+          <div>No active orders</div>
+        </div>
+      </main>
+
+      <section id="completed-section">
+        <div class="completed-title">Recently completed</div>
+        <div id="done-container" class="completed-grid"></div>
+      </section>
+    </div>
+
+    <aside id="details-panel" class="details-panel">
+      <div class="details-panel-empty">
+        Select an order bubble to see order details.
+      </div>
+    </aside>
+  </div>
+
+  <!-- retro diner chime -->
+  <audio id="ready-sound" preload="auto">
+    <source src="/sounds/order-ready.mp3" type="audio/mpeg" />
+  </audio>
+
+  <script>
+    const WS_URL =
+      (location.protocol === "https:" ? "wss://" : "ws://") +
+      location.host +
+      "/ws";
+
+    const bubbleContainer = document.getElementById("bubble-container");
+    const emptyState = document.getElementById("empty-state");
+    const connectionStatus = document.getElementById("connection-status");
+    const readySound = document.getElementById("ready-sound");
+    const detailsPanel = document.getElementById("details-panel");
+    const doneContainer = document.getElementById("done-container");
+
+    const orders = {};
+    let socket;
+    let selectedOrderNumber = null;
+
+    // TTS + announcement queue
+    let preferredVoice = null;
+    let announcementQueue = [];
+    let isAnnouncing = false;
+
+    /* -----------------------------
+       TTS SETUP (pick nicer voice)
+    --------------------------------*/
+    function loadVoices() {
+      if (!("speechSynthesis" in window)) return;
+      const voices = window.speechSynthesis.getVoices();
+      preferredVoice =
+        voices.find((v) => v.name && v.name.includes("Google US English")) ||
+        voices.find((v) => v.lang && v.lang.startsWith("en")) ||
+        null;
+    }
+
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+      loadVoices();
+    }
+
+    function announceOrder(orderNumber) {
+      if (!("speechSynthesis" in window)) return null;
+
+      const msg = new SpeechSynthesisUtterance(
+        `Order ${orderNumber} is ready for pick up`
+      );
+      msg.volume = 1.0;
+      msg.rate = 0.98;
+      msg.pitch = 1.02;
+
+      if (preferredVoice) {
+        msg.voice = preferredVoice;
+      }
+
+      window.speechSynthesis.speak(msg);
+      return msg;
+    }
+
+    function queueAnnouncement(orderNumber) {
+      announcementQueue.push(orderNumber);
+      if (!isAnnouncing) {
+        playNextAnnouncement();
+      }
+    }
+
+    function playNextAnnouncement() {
+      if (announcementQueue.length === 0) {
+        isAnnouncing = false;
+        return;
+      }
+
+      isAnnouncing = true;
+      const orderNumber = announcementQueue.shift();
+
+      const doTTS = () => {
+        const utterance = announceOrder(orderNumber);
+        if (utterance) {
+          utterance.onend = () => {
+            playNextAnnouncement();
+          };
+        } else {
+          // No TTS available, move to next
+          playNextAnnouncement();
+        }
+      };
+
+      try {
+        readySound.currentTime = 0;
+        readySound.onended = () => {
+          readySound.onended = null;
+          doTTS();
+        };
+        readySound.play().catch(() => {
+          // If audio fails, skip straight to TTS
+          readySound.onended = null;
+          doTTS();
+        });
+      } catch (e) {
+        doTTS();
+      }
+    }
+
+    /* -----------------------------
+       CONNECT TO WEBSOCKET
+    --------------------------------*/
+    function setConnectionState(connected) {
+      const dot = connectionStatus.querySelector(".dot");
+      const label = connectionStatus.querySelector("span:last-child");
+
+      if (connected) {
+        dot.style.background = "#22c55e";
+        label.textContent = "Connected";
+      } else {
+        dot.style.background = "#f97316";
+        label.textContent = "Reconnecting…";
+      }
+    }
+
+    function connect() {
+      setConnectionState(false);
+      socket = new WebSocket(WS_URL);
+
+      socket.onopen = () => {
+        setConnectionState(true);
+        sendMessage({ type: "SYNC_REQUEST" });
+      };
+
+      socket.onmessage = (event) => {
+        handleMessage(JSON.parse(event.data));
+      };
+
+      socket.onclose = () => {
+        setConnectionState(false);
+        setTimeout(connect, 2000);
+      };
+
+      socket.onerror = () => {
+        // let onclose handle reconnect
+      };
+    }
+
+    function sendMessage(msg) {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(msg));
+      }
+    }
+
+    /* -----------------------------
+       HANDLE INCOMING MESSAGES
+    --------------------------------*/
+    function handleMessage(msg) {
+      switch (msg.type) {
+        case "NEW_ORDER":
+          addOrUpdate(msg.orderNumber, "new", msg);
+          if (!selectedOrderNumber) {
+            selectedOrderNumber = msg.orderNumber;
+          }
+          break;
+
+        case "SYNC_STATE":
+          (msg.orders || []).forEach((o) =>
+            addOrUpdate(o.orderNumber, o.status || "new", o)
+          );
+          if (!selectedOrderNumber && (msg.orders || []).length > 0) {
+            selectedOrderNumber = msg.orders[0].orderNumber;
+          }
+          break;
+
+        case "ORDER_READY_CONFIRM":
+          markReady(msg.orderNumber, { playSound: true });
+          break;
+      }
+      render();
+    }
+
+    /* -----------------------------
+       ORDER MANAGEMENT
+    --------------------------------*/
+    function addOrUpdate(orderNumber, status, data = {}) {
+      const existing = orders[orderNumber] || {};
+      orders[orderNumber] = {
+        orderNumber,
+        status,
+        createdAt: data.createdAt || existing.createdAt || Date.now(),
+        itemCount: data.itemCount ?? existing.itemCount ?? null,
+        items: data.items || existing.items || [],
+      };
+    }
+
+    function cycleStatus(orderNumber) {
+      const o = orders[orderNumber];
+      if (!o) return;
+
+      selectedOrderNumber = orderNumber;
+
+      if (o.status === "new") {
+        o.status = "in-progress";
+      } else if (o.status === "in-progress") {
+        o.status = "ready";
+
+        sendMessage({ type: "ORDER_READY", orderNumber });
+
+        // Enqueue announcement (chime + TTS)
+        queueAnnouncement(orderNumber);
+
+        moveToDoneAfterDelay(orderNumber);
+      }
+
+      render();
+    }
+
+    function markReady(orderNumber, options = {}) {
+      const o = orders[orderNumber];
+      if (!o) return;
+
+      o.status = "ready";
+      selectedOrderNumber = orderNumber;
+      render();
+
+      if (options.playSound) {
+        queueAnnouncement(orderNumber);
+      }
+
+      moveToDoneAfterDelay(orderNumber);
+    }
+
+    function moveToDoneAfterDelay(orderNumber) {
+      setTimeout(() => {
+        const o = orders[orderNumber];
+        if (o && o.status === "ready") {
+          o.status = "done";
+          render();
+        }
+      }, 5000);
+    }
+
+    /* -----------------------------
+       RENDERING
+    --------------------------------*/
+    function render() {
+      const list = Object.values(orders).sort(
+        (a, b) => a.createdAt - b.createdAt
+      );
+
+      const active = list.filter((o) => o.status !== "done");
+      const done = list.filter((o) => o.status === "done");
+
+      // Active bubbles (top)
+      bubbleContainer.innerHTML = "";
+
+      if (active.length === 0) {
+        bubbleContainer.appendChild(emptyState);
+      } else {
+        active.forEach((o) => {
+          const isSelected = o.orderNumber === selectedOrderNumber;
+          const b = document.createElement("div");
+          b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
+          b.dataset.order = o.orderNumber;
+          b.onclick = () => cycleStatus(o.orderNumber);
+
+          b.innerHTML = `
+            <div class="bubble-number">#${o.orderNumber}</div>
+            <div class="bubble-meta">${
+              o.itemCount
+                ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}`
+                : ""
+            }</div>
+            <div class="bubble-status">
+              ${
+                o.status === "new"
+                  ? "NEW"
+                  : o.status === "in-progress"
+                  ? "IN PROGRESS"
+                  : "READY"
+              }
+            </div>
+          `;
+          bubbleContainer.appendChild(b);
+        });
+      }
+
+      // Done bubbles (bottom)
+      doneContainer.innerHTML = "";
+      done.forEach((o) => {
+        const isSelected = o.orderNumber === selectedOrderNumber;
+        const b = document.createElement("div");
+        b.className = `bubble done${isSelected ? " selected" : ""}`;
+
+        // Click: select and show details, no state change
+        b.onclick = () => {
+          selectedOrderNumber = o.orderNumber;
+          render();
+        };
+
+        b.innerHTML = `
+          <div class="bubble-number">#${o.orderNumber}</div>
+          <div class="bubble-meta">${
+            o.itemCount
+              ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}`
+              : ""
+          }</div>
+          <div class="bubble-status">DONE</div>
+        `;
+        doneContainer.appendChild(b);
+      });
+
+      renderDetails();
+    }
+
+    function renderDetails() {
+      const o = selectedOrderNumber ? orders[selectedOrderNumber] : null;
+
+      if (!o) {
+        detailsPanel.innerHTML = `
+          <div class="details-panel-empty">
+            Select an order bubble to see order details.
+          </div>
+        `;
+        return;
+      }
+
+      const statusLabel =
+        o.status === "new"
+          ? "NEW"
+          : o.status === "in-progress"
+          ? "IN PROGRESS"
+          : o.status === "ready"
+          ? "READY"
+          : "DONE";
+
+      const items = o.items || [];
+      const itemsHtml =
+        items.length > 0
+          ? items
+              .map(
+                (item) => `
+            <div class="details-item">
+              <span class="details-item-name">${item.name}</span>
+              <span class="details-item-qty">x${item.quantity}</span>
+            </div>
+          `
+              )
+              .join("")
+          : '<div class="details-panel-empty">No item details.</div>';
+
+      detailsPanel.innerHTML = `
+        <div class="details-order-title">Order #${o.orderNumber}</div>
+        <div class="details-meta">
+          Status: ${statusLabel}<br/>
+          Items: ${
+            o.itemCount ??
+            (o.items && o.items.length ? o.items.length : 0)
+          }
+        </div>
+        <div class="details-items-title">Items</div>
+        <div class="details-items">
+          ${itemsHtml}
+        </div>
+      `;
+    }
+
+    connect();
+  </script>
+</body>
+</html>
