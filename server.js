@@ -1,108 +1,216 @@
+// ===============================
+// VertiDog KDS Backend – Robust Square Parsing
+// ===============================
+
 const express = require("express");
-const bodyParser = require("body-parser");
 const http = require("http");
-const path = require("path");
 const { WebSocketServer } = require("ws");
+const bodyParser = require("body-parser");
+const path = require("path");
 
 const app = express();
-app.use(bodyParser.json());
+const PORT = process.env.PORT || 10000;
 
-// -----------------------------------------------------------------------------
-// WEBSOCKET SERVER
-// -----------------------------------------------------------------------------
+// ---------------- HTTP + WebSocket server ----------------
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-function broadcast(order) {
+// In-memory order store so we can merge multiple events
+// Shape: { [orderId]: { orderId, orderNumber, status, createdAt, itemCount, items[] } }
+const orders = {};
+
+// ---------------- Helpers ----------------
+
+function toNumberQuantity(q) {
+  if (q === undefined || q === null) return 0;
+  const n = Number(q);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Websocket broadcast helper
+function broadcast(msgObj) {
+  const data = JSON.stringify(msgObj);
   wss.clients.forEach((client) => {
     if (client.readyState === 1) {
-      client.send(JSON.stringify(order));
+      client.send(data);
     }
   });
 }
 
 wss.on("connection", (ws) => {
   console.log("KDS connected");
-  ws.on("close", () => console.log("KDS disconnected"));
+
+  // On connect, send current state
+  ws.send(
+    JSON.stringify({
+      type: "SYNC",
+      orders,
+    })
+  );
+
+  ws.on("close", () => {
+    console.log("KDS disconnected");
+  });
 });
 
-// -----------------------------------------------------------------------------
-// STATIC FILES
-// -----------------------------------------------------------------------------
+// ---------------- Static files ----------------
+
+app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/kitchen", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "kitchen.html"));
 });
 
-// -----------------------------------------------------------------------------
-// WEBHOOK HANDLER
-// -----------------------------------------------------------------------------
-app.post("/square/webhook", async (req, res) => {
+app.get("/", (req, res) => {
+  res.redirect("/kitchen");
+});
+
+// ---------------- Square webhook ----------------
+
+app.post("/square/webhook", (req, res) => {
   try {
-    const event = req.body;
+    const body = req.body || {};
+    console.log("🔔 Square Webhook Received:", JSON.stringify(body));
 
-    console.log("🔔 Square Webhook Received:", JSON.stringify(event));
+    const eventType = body.type;
+    console.log("Square Event:", eventType);
 
-    const type = event.type;
-    console.log("Square Event:", type);
+    const dataObj = body.data || {};
+    const objectWrapper = dataObj.object || {};
 
-    if (type !== "order.created" && type !== "order.updated") {
-      return res.status(200).send("Ignored");
+    // Square sends a few different shapes; support as many as possible:
+
+    // Newer style: data.object.order
+    let eventWrapper =
+      objectWrapper.order ||
+      objectWrapper.order_created ||
+      objectWrapper.order_updated ||
+      null;
+
+    if (!eventWrapper) {
+      console.log("❌ No order wrapper (order / order_created / order_updated).");
+      return res.status(200).send("ok");
     }
 
-    const orderObj = event.data?.object?.order;
-    if (!orderObj) {
-      console.log("❌ No order object in webhook");
-      return res.status(200).send("Missing order");
+    // Try to get a full order resource if present
+    let fullOrder = eventWrapper.order || null;
+
+    // Extract core metadata whether or not we have fullOrder
+    const orderId = (fullOrder && fullOrder.id) || eventWrapper.order_id;
+    const state = (fullOrder && fullOrder.state) || eventWrapper.state;
+
+    if (!orderId) {
+      console.log("❌ No order_id present in event.");
+      return res.status(200).send("ok");
     }
 
-    // -------------------------------------------------------------------------
-    // FIX 1 — Use receipt_number OR short hash fallback
-    // -------------------------------------------------------------------------
-    const orderNumber =
-      orderObj.receipt_number ||
-      orderObj.ticket_name ||
-      orderObj.id.slice(-6).toUpperCase();
+    // ---------- ORDER NUMBER (for bubble label) ----------
+    let orderNumber = null;
+    if (fullOrder) {
+      orderNumber =
+        fullOrder.ticket_name ||
+        fullOrder.order_number ||
+        fullOrder.display_id ||
+        fullOrder.receipt_number ||
+        (fullOrder.id ? fullOrder.id.slice(-6) : null);
+    } else {
+      // Minimal event: we only have order_id and maybe state
+      orderNumber = orderId.slice(-6);
+    }
 
-    // -------------------------------------------------------------------------
-    // FIX 2 — Extract items properly for real POS orders
-    // -------------------------------------------------------------------------
-    const items = (orderObj.line_items || []).map((item) => ({
-      name: item.name,
-      quantity: item.quantity,
-      modifiers: item.modifiers
-        ? item.modifiers.map((m) => m.name)
-        : [],
-    }));
+    // ---------- ITEMS ----------
+    let items = [];
 
-    const parsed = {
-      orderNumber,
-      status: orderObj.state?.toLowerCase() || "new",
-      createdAt: Date.now(),
-      itemCount: items.length,
+    if (fullOrder && Array.isArray(fullOrder.line_items)) {
+      items = fullOrder.line_items.map((li) => ({
+        name: li.name || "Item",
+        quantity: toNumberQuantity(li.quantity || 1),
+        modifiers: Array.isArray(li.modifiers)
+          ? li.modifiers.map((m) => m.name).filter(Boolean)
+          : [],
+      }));
+    } else if (orders[orderId] && Array.isArray(orders[orderId].items)) {
+      // If this is an update event without items, keep what we already know
+      items = orders[orderId].items;
+    }
+
+    const itemCount = items.reduce(
+      (sum, it) => sum + toNumberQuantity(it.quantity),
+      0
+    );
+
+    // Map Square state into our internal status if you ever want to,
+    // but for now let the kitchen taps control status.
+    const statusFromSquare =
+      typeof state === "string" ? state.toLowerCase() : "new";
+
+    const existing = orders[orderId] || {};
+    const merged = {
+      orderId,
+      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
+      status: existing.status || "new", // kitchen drives status
+      createdAt: existing.createdAt || Date.now(),
+      itemCount,
       items,
+      stateFromSquare: statusFromSquare,
     };
 
-    console.log("✅ Parsed Webhook Order:", parsed);
+    // Save merged order
+    orders[orderId] = merged;
 
-    // Broadcast to KDS
+    console.log("✅ Parsed / merged order:", merged);
+
+    // Notify KDS screens about (new or updated) order
     broadcast({
-      type: "new_order",
-      payload: parsed,
+      type: "NEW_ORDER",
+      ...merged,
     });
 
-    res.status(200).send("OK");
+    return res.status(200).send("ok");
   } catch (err) {
     console.error("Webhook Error:", err);
-    res.status(500).send("Error");
+    // Still acknowledge so Square doesn’t retry spam
+    return res.status(200).send("error");
   }
 });
 
-// -----------------------------------------------------------------------------
-// START SERVER
-// -----------------------------------------------------------------------------
-const PORT = process.env.PORT || 10000;
+// ---------------- Test endpoint ----------------
+
+app.get("/test-order", (req, res) => {
+  const num = Math.floor(Math.random() * 900 + 100);
+  const orderId = `TEST-${num}`;
+  const order = {
+    orderId,
+    orderNumber: String(num),
+    status: "new",
+    createdAt: Date.now(),
+    items: [
+      { name: "Hot Dog", quantity: 1, modifiers: [] },
+      { name: "Coke", quantity: 1, modifiers: [] },
+    ],
+  };
+  order.itemCount = order.items.length;
+
+  orders[orderId] = order;
+
+  broadcast({
+    type: "NEW_ORDER",
+    ...order,
+  });
+
+  res.send(`Test order #${num} sent to KDS`);
+});
+
+// ---------------- Health ----------------
+
+app.get("/healthz", (req, res) => {
+  res.status(200).send("OK");
+});
+
+// ---------------- Start server ----------------
+
 server.listen(PORT, () => {
-  console.log(`VertiDog KDS backend running on port ${PORT}`);
+  console.log(`🚀 VertiDog KDS backend running on port ${PORT}`);
 });
