@@ -16,7 +16,7 @@
       --text: #e5e7eb;
       --muted: #6b7280;
       --accent: #a855f7;
-      --drag-hover-color: rgba(168, 85, 247, 0.3); /* Lighter purple for drop targets */
+      --drag-hover-color: rgba(168, 85, 247, 0.3);
     }
     * {
       box-sizing: border-box;
@@ -96,10 +96,10 @@
       flex: 1;
       padding: 0.75rem;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Larger bubbles */
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 0.75rem;
       overflow-y: auto;
-      min-height: 200px; /* Ensure drop target area is visible */
+      min-height: 200px;
     }
 
     /* DRAG STYLES */
@@ -125,7 +125,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      cursor: grab; /* Cursor hint for dragging */
+      cursor: grab;
       border: 2px solid transparent;
       box-shadow:
         0 4px 12px rgba(0, 0, 0, 0.4);
@@ -214,7 +214,7 @@
       padding: 0.5rem 0.75rem 0.75rem;
       border-top: 1px solid rgba(15, 23, 42, 0.9);
       background: #020617;
-      min-height: 120px; /* Ensure drop target area is visible */
+      min-height: 120px;
     }
     .completed-title {
       font-size: 0.8rem;
@@ -258,7 +258,7 @@
     }
 
     .bubble.done {
-      background: #1f2937; /* Darker gray for completed */
+      background: #1f2937;
       border-color: #374151;
       opacity: 0.7;
     }
@@ -322,8 +322,8 @@
       padding: 0.4rem 0;
       border-bottom: 1px solid rgba(148, 163, 184, 0.1);
     }
-    .details-item-name {
-      font-weight: 600;
+    .details-item-name strong {
+        font-weight: 700;
     }
     .details-item-qty {
       color: var(--accent);
@@ -437,7 +437,7 @@
     }
 
     /* -----------------------------
-      TTS SETUP (pick nicer voice)
+      TTS SETUP
     --------------------------------*/
     function loadVoices() {
       if (!("speechSynthesis" in window)) return;
@@ -494,7 +494,6 @@
             playNextAnnouncement();
           };
         } else {
-          // No TTS available, move to next
           playNextAnnouncement();
         }
       };
@@ -506,7 +505,6 @@
           doTTS();
         };
         readySound.play().catch(() => {
-          // If audio fails, skip straight to TTS
           readySound.onended = null;
           doTTS();
         });
@@ -579,7 +577,6 @@
           break;
 
         case "ORDER_READY_CONFIRM":
-          // When the server confirms, we mark it ready and trigger the completion timeout.
           markReady(msg.orderNumber, { playSound: true }); 
           break;
       }
@@ -589,52 +586,41 @@
     /* -----------------------------
       DRAG & DROP LOGIC
     --------------------------------*/
-
-    // Set the orderNumber being dragged in the dataTransfer object
     function handleDragStart(event) {
         const orderNumber = event.target.dataset.order;
         event.dataTransfer.setData('text/plain', orderNumber);
         event.target.classList.add('dragging');
     }
 
-    // Clean up after the drag ends
     function handleDragEnd(event) {
         event.target.classList.remove('dragging');
     }
 
-    // Allow drop operation
     function handleDragOver(event, targetType) {
-        event.preventDefault(); // Necessary to allow drop
+        event.preventDefault();
         const targetElement = (targetType === 'active') ? bubbleContainer : document.getElementById('completed-section');
         targetElement.classList.add(`drag-over-${targetType}`);
     }
 
-    // Remove visual cue when drag leaves
     function handleDragLeave(event, targetType) {
         const targetElement = (targetType === 'active') ? bubbleContainer : document.getElementById('completed-section');
         targetElement.classList.remove(`drag-over-${targetType}`);
     }
 
-    // Handle the actual drop action
     function handleDrop(event, targetType) {
         event.preventDefault();
         const orderNumber = event.dataTransfer.getData('text/plain');
         
-        // Remove drag-over classes
         bubbleContainer.classList.remove('drag-over-active');
         document.getElementById('completed-section').classList.remove('drag-over-done');
 
         if (!orderNumber || !orders[orderNumber]) return;
 
         if (targetType === 'active') {
-            // Dragged to main screen -> Must become ACTIVE ('in-progress')
             orders[orderNumber].status = 'in-progress';
-            // Inform server to unlock the status and reactivate
             sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
         } else if (targetType === 'done') {
-            // Dragged to completed section -> Must become DONE
             orders[orderNumber].status = 'done';
-            // Inform server to mark it done
             sendMessage({ type: "ORDER_SKIPPED_DONE", orderNumber: orderNumber });
         }
 
@@ -658,7 +644,6 @@
         orderId: data.orderId || existing.orderId,
       };
       
-      // If order is cancelled, ensure it's unselected
       if (status === 'cancelled') {
         if (selectedOrderNumber === orderNumber) {
           selectedOrderNumber = null;
@@ -674,46 +659,34 @@
         queueAnnouncement(orderNumber);
       }
     
-      // Set timer to move to 'done' after 5 seconds
+      // Auto-move to 'done' after 5 seconds
       setTimeout(() => {
         const oCheck = orders[orderNumber];
         if (oCheck && oCheck.status === "ready") {
           oCheck.status = "done";
           render();
         }
-      }, 5000); // 5-second delay
+      }, 5000);
     }
 
-    // This function handles both tap-to-cycle and click-to-select
+    // Tap-to-cycle functionality
     window.cycleStatus = function(orderNumber) {
       const o = orders[orderNumber];
       
-      selectedOrderNumber = orderNumber; // Always select when tapping
+      selectedOrderNumber = orderNumber;
       
-      if (!o) {
-         renderDetails();
-         return;
-      }
-      
-      // If the order is currently done or cancelled, just select it, don't cycle.
-      if (o.status === 'cancelled' || o.status === 'done') {
+      if (!o || o.status === 'cancelled' || o.status === 'done') {
          render();
          return;
       }
 
-      // Active status cycling
       if (o.status === "new") {
         o.status = "in-progress";
       } else if (o.status === "in-progress") {
         o.status = "ready";
-
-        // 1. Send Ready status to the server
         sendMessage({ type: "ORDER_READY", orderNumber });
-
-        // 2. Client immediately initiates the ready actions (sound/TTS and the move-to-done timeout)
         triggerReadyActions(orderNumber, { playSound: true });
       } else if (o.status === "ready") {
-         // Tapping ready order immediately marks it done
          o.status = "done";
       }
 
@@ -724,12 +697,10 @@
       const o = orders[orderNumber];
       if (!o || o.status === 'done' || o.status === 'cancelled') return;
 
-      // Ensure local status is "ready"
       o.status = "ready";
       selectedOrderNumber = orderNumber;
       render();
 
-      // Trigger ready actions (sound, TTS, and 5-second move to DONE)
       triggerReadyActions(orderNumber, options);
     }
     
@@ -747,22 +718,17 @@
       });
     }
     setInterval(updateTimers, 1000); 
-    // ---------------------------------------------------
 
 
     /* -----------------------------
       RENDERING
     --------------------------------*/
     function render() {
-      // List of all order objects
       const list = Object.values(orders).sort(
         (a, b) => a.createdAt - b.createdAt
       );
 
-      // Active orders are NOT 'done' and NOT 'cancelled'
       const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
-      
-      // Completed/Done orders ARE 'done' OR 'cancelled'
       const done = list.filter((o) => o.status === "done" || o.status === "cancelled");
 
       // Active bubbles (top)
@@ -776,10 +742,10 @@
           const b = document.createElement("div");
           b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
-          b.setAttribute('draggable', true); // Enable dragging for active cards
+          b.setAttribute('draggable', true);
           b.ondragstart = handleDragStart;
           b.ondragend = handleDragEnd;
-          b.onclick = () => window.cycleStatus(o.orderNumber); // Re-added click handler
+          b.onclick = () => window.cycleStatus(o.orderNumber);
 
           const statusText = 
             o.status === "new" ? "NEW" : 
@@ -807,11 +773,10 @@
         const b = document.createElement("div");
         b.className = `bubble ${statusClass}${isSelected ? " selected" : ""}`;
         b.dataset.order = o.orderNumber;
-        b.setAttribute('draggable', true); // Enable dragging for done cards
+        b.setAttribute('draggable', true);
         b.ondragstart = handleDragStart;
         b.ondragend = handleDragEnd;
 
-        // Click: select and show details, but DO NOT cycle status.
         b.onclick = () => {
           selectedOrderNumber = o.orderNumber;
           render();
@@ -830,9 +795,7 @@
     function renderDetails() {
       const o = selectedOrderNumber ? orders[selectedOrderNumber] : null; 
 
-      // Remove selected class from all bubbles first
       document.querySelectorAll('.bubble').forEach(b => b.classList.remove('selected'));
-      // Add selected class to the currently selected bubble
       if(selectedOrderNumber) {
         document.querySelector(`.bubble[data-order="${selectedOrderNumber}"]`)?.classList.add('selected');
       }
@@ -864,7 +827,7 @@
               .map(
                 (item) => `
                 <div class="details-item">
-                  <span class="details-item-name">${item.name}</span>
+                  <span class="details-item-name"><strong>${item.name}</strong></span>
                   <span class="details-item-qty">x${item.quantity}</span>
                 </div>
                 ${ 
