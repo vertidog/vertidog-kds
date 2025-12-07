@@ -4,15 +4,9 @@ const path = require('path');
 const fs = require('fs');
 
 const wss = new WebSocket.Server({ noServer: true });
-const orders = {}; // Central storage for order states
-
-// --- STATUS LOCK & ORDER MANAGEMENT ---
-
-const FINAL_STATUSES = ['done', 'cancelled'];
-const statusLock = new Set(); 
+const orders = {}; 
 
 function generateRandomOrderNumber() {
-    // Generates a random number between 100 and 999
     return Math.floor(Math.random() * 900) + 100;
 }
 
@@ -28,8 +22,8 @@ function broadcast(data) {
 function handleClientMessage(client, message) {
     const msg = JSON.parse(message);
     const orderNumber = msg.orderNumber;
-
-    // Prevents changes to finalized orders, maintaining state integrity
+    const FINAL_STATUSES = ['done', 'cancelled'];
+    
     if (orderNumber && FINAL_STATUSES.includes(orders[orderNumber]?.status)) {
         console.log(`[LOCK] Ignoring status change for finalized order #${orderNumber}`);
         return; 
@@ -52,33 +46,26 @@ function handleClientMessage(client, message) {
             break;
 
         case 'ORDER_REACTIVATED':
-            // Logic for dragging a completed order back to the active queue
             if (orders[orderNumber]) {
                 orders[orderNumber].status = 'in-progress';
                 console.log(`Order #${orderNumber} reactivated to IN-PROGRESS.`);
-                statusLock.delete(orderNumber);
                 broadcast({ type: 'NEW_ORDER', ...orders[orderNumber] });
             }
             break;
 
         case 'ORDER_SKIPPED_DONE':
-            // Logic for dragging an order directly to the done section
             if (orders[orderNumber]) {
                 orders[orderNumber].status = 'done';
                 console.log(`Order #${orderNumber} manually marked DONE.`);
                 broadcast({ type: 'NEW_ORDER', ...orders[orderNumber] });
             }
             break;
-
-        default:
-            console.log('Unknown message type:', msg.type);
     }
 }
 
 // --- HTTP SERVER SETUP ---
 
 const server = http.createServer((req, res) => {
-    // 1. WebSocket Upgrade handling
     if (req.url === '/ws') {
         server.on('upgrade', (req, socket, head) => {
             wss.handleUpgrade(req, socket, head, (ws) => {
@@ -88,74 +75,58 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // 2. Test Order Endpoint
     if (req.url === '/test-order') {
         const newOrderNumber = generateRandomOrderNumber();
         const newOrder = {
             orderNumber: newOrderNumber,
             status: 'new',
             createdAt: Date.now(),
-            // --- RICH ITEM DATA STRUCTURE (Simulating POS) ---
             items: [
-                { 
-                    name: "Classic Vertidog", 
-                    quantity: 2, 
-                    modifiers: ["Ketchup", "Grilled Onions", "Add Chili"] 
-                },
-                { 
-                    name: "Veggie Vertidog", 
-                    quantity: 1, 
-                    modifiers: ["No Cheese", "Extra Pickles"] 
-                },
-                { 
-                    name: "Large Soda", 
-                    quantity: 3, 
-                    modifiers: ["Coke", "Sprite", "Diet Coke"] 
-                },
-                { 
-                    name: "Side Fries", 
-                    quantity: 1, 
-                    modifiers: [] 
-                }
+                { name: "Classic Vertidog", quantity: 2, modifiers: ["Ketchup", "Grilled Onions", "Add Chili"] },
+                { name: "Veggie Vertidog", quantity: 1, modifiers: ["No Cheese", "Extra Pickles"] },
+                { name: "Large Soda", quantity: 3, modifiers: ["Coke", "Sprite", "Diet Coke"] },
+                { name: "Side Fries", quantity: 1, modifiers: [] }
             ],
         };
-
-        // Calculate total item count
         newOrder.itemCount = newOrder.items.reduce((sum, item) => sum + item.quantity, 0);
-        
         orders[newOrderNumber] = newOrder;
 
         console.log(`New Test Order Generated: #${newOrderNumber}`);
-        broadcast({ 
-            type: 'NEW_ORDER', 
-            ...newOrder 
-        });
+        broadcast({ type: 'NEW_ORDER', ...newOrder });
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ message: `Test order #${newOrderNumber} created.` }));
         return;
     }
 
-    // 3. Static File Serving (KDS HTML and other assets)
+    // --- STATIC FILE SERVING ---
+    // Ensure we default to kitchen.html if the URL is just '/'
     let filePath = path.join(__dirname, req.url === '/' ? 'kitchen.html' : req.url);
     const extname = String(path.extname(filePath)).toLowerCase();
     const mimeTypes = {
         '.html': 'text/html',
         '.js': 'text/javascript',
         '.css': 'text/css',
-        '.mp3': 'audio/mpeg'
     };
 
     const contentType = mimeTypes[extname] || 'application/octet-stream';
+    
+    // Safety check for the root file if requested without extension
+    if (!extname && req.url === '/') {
+        filePath = path.join(__dirname, 'kitchen.html');
+    }
 
     fs.readFile(filePath, (error, content) => {
         if (error) {
+            // Log the error locally so you can see why it failed to load
+            console.error(`[404 ERROR] Failed to load file: ${filePath}. Error code: ${error.code}`);
+            
             if (error.code === 'ENOENT') {
                 res.writeHead(404);
-                res.end('404 Not Found');
+                res.end(`404 Not Found. File: ${req.url}`);
             } else {
                 res.writeHead(500);
-                res.end('Sorry, check with the site admin for error: ' + error.code + ' ..\n');
+                res.end('Sorry, check the server console for error details.\n');
             }
         } else {
             res.writeHead(200, { 'Content-Type': contentType });
@@ -164,15 +135,11 @@ const server = http.createServer((req, res) => {
     });
 });
 
-// --- WEBSOCKET CONNECTION HANDLING ---
-
 wss.on('connection', (ws) => {
     console.log('New KDS client connected.');
     ws.on('message', (message) => handleClientMessage(ws, message.toString()));
     ws.on('close', () => console.log('KDS client disconnected.'));
 });
-
-// --- START SERVER ---
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
