@@ -1,6 +1,9 @@
-// ===============================
-// VertiDog KDS Backend – with Square Orders API
-// ===============================
+// ======================================
+// VertiDog KDS Backend
+// - Express + WebSocket
+// - Square Webhook + Orders API
+// - Umbrella item + variation + modifiers
+// ======================================
 
 const express = require("express");
 const http = require("http");
@@ -8,21 +11,25 @@ const { WebSocketServer } = require("ws");
 const bodyParser = require("body-parser");
 const path = require("path");
 
+// ------------------ Config ------------------
+
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// For Square Orders API
+// Square credentials via env vars (Render)
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN;
-const SQUARE_ENV = process.env.SQUARE_ENV || "production"; // or "sandbox"
+const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || "production";
+
 const SQUARE_BASE_URL =
-  SQUARE_ENV === "sandbox"
+  SQUARE_ENVIRONMENT === "sandbox"
     ? "https://connect.squareupsandbox.com"
     : "https://connect.squareup.com";
 
-// In-memory store keyed by orderId
+// In-memory order store, keyed by orderId
+// { [orderId]: { orderId, orderNumber, status, createdAt, itemCount, items[], stateFromSquare } }
 const orders = {};
 
-// ---------------- Helpers ----------------
+// ------------------ Helpers ------------------
 
 function toNumberQuantity(q) {
   if (q === undefined || q === null) return 0;
@@ -30,17 +37,60 @@ function toNumberQuantity(q) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function broadcast(msgObj) {
-  const data = JSON.stringify(msgObj);
-  wss.clients.forEach((client) => {
-    if (client.readyState === 1) client.send(data);
+// Build display items from Square line_items
+// - Uses variation_name + umbrella name
+// - Includes modifiers by name
+function buildItemsFromLineItems(lineItems, previousItems = []) {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+    // if we don't have anything new, keep what we had
+    return previousItems;
+  }
+
+  return lineItems.map((li) => {
+    const qty = toNumberQuantity(li.quantity || 1);
+
+    const umbrella = li.name || ""; // e.g. "VertiDog", "Soda"
+    const variation = li.variation_name || ""; // e.g. "Classic", "Coca-Cola"
+
+    let displayName;
+
+    if (
+      variation &&
+      umbrella &&
+      variation.toLowerCase() !== umbrella.toLowerCase()
+    ) {
+      // Show variation + umbrella: "Classic (VertiDog)"
+      displayName = `${variation} (${umbrella})`;
+    } else {
+      // Fall back to whatever we have
+      displayName = variation || umbrella || "Item";
+    }
+
+    const modifiers = Array.isArray(li.modifiers)
+      ? li.modifiers.map((m) => m.name).filter(Boolean)
+      : [];
+
+    return {
+      name: displayName,
+      quantity: qty || 1,
+      modifiers,
+    };
   });
 }
 
-// Fetch full order from Square if webhook was minimal
+function broadcast(msgObj) {
+  const data = JSON.stringify(msgObj);
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1) {
+      client.send(data);
+    }
+  });
+}
+
+// Fetch full order details from Square Orders API
 async function fetchOrderFromSquare(orderId) {
   if (!SQUARE_ACCESS_TOKEN) {
-    console.log("⚠️ No SQUARE_ACCESS_TOKEN set, skipping Orders API fetch.");
+    console.log("⚠️ SQUARE_ACCESS_TOKEN not set; cannot call Orders API.");
     return null;
   }
 
@@ -50,13 +100,13 @@ async function fetchOrderFromSquare(orderId) {
       headers: {
         Authorization: `Bearer ${SQUARE_ACCESS_TOKEN}`,
         "Content-Type": "application/json",
-        "Square-Version": "2024-03-20", // any recent date works
+        "Square-Version": "2024-03-20",
       },
     });
 
     if (!resp.ok) {
       console.log(
-        "❌ Square Orders API error:",
+        "❌ Orders API error:",
         resp.status,
         resp.statusText
       );
@@ -74,15 +124,20 @@ async function fetchOrderFromSquare(orderId) {
   }
 }
 
-// ---------------- HTTP + WebSocket server ----------------
+// ------------------ HTTP + WebSocket ------------------
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+
+// WebSocket on /ws for kitchen screens
+const wss = new WebSocketServer({
+  server,
+  path: "/ws",
+});
 
 wss.on("connection", (ws) => {
   console.log("KDS connected");
 
-  // send current state on connect
+  // Send current state immediately
   ws.send(
     JSON.stringify({
       type: "SYNC",
@@ -90,23 +145,32 @@ wss.on("connection", (ws) => {
     })
   );
 
-  ws.on("close", () => console.log("KDS disconnected"));
+  ws.on("close", () => {
+    console.log("KDS disconnected");
+  });
 });
 
-// ---------------- Middleware + static ----------------
+// ------------------ Middleware & Static ------------------
 
 app.use(bodyParser.json());
+
+// Serve static files (kitchen.html, sounds, etc.)
 app.use(express.static(path.join(__dirname, "public")));
 
+// Kitchen screen
 app.get("/kitchen", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "kitchen.html"));
 });
 
-app.get("/", (req, res) => res.redirect("/kitchen"));
+// Convenience root -> /kitchen
+app.get("/", (req, res) => {
+  res.redirect("/kitchen");
+});
 
+// Health check
 app.get("/healthz", (req, res) => res.status(200).send("OK"));
 
-// ---------------- Square Webhook ----------------
+// ------------------ Square Webhook ------------------
 
 app.post("/square/webhook", async (req, res) => {
   try {
@@ -119,10 +183,10 @@ app.post("/square/webhook", async (req, res) => {
     const dataObj = body.data || {};
     const objectWrapper = dataObj.object || {};
 
-    // eventWrapper might be:
-    // - { order: { ... } }
-    // - { order_created: { order, order_id, state } }
-    // - { order_updated: { order, order_id, state } }
+    // Webhook variations:
+    // { order: { ... } }
+    // { order_created: { order, order_id, state } }
+    // { order_updated: { order, order_id, state } }
     let eventWrapper =
       objectWrapper.order ||
       objectWrapper.order_created ||
@@ -136,19 +200,18 @@ app.post("/square/webhook", async (req, res) => {
       return res.status(200).send("ok");
     }
 
-    // fullOrder only exists if webhook carried the full resource
     let fullOrder = eventWrapper.order || null;
-
-    // orderId / state appear even in minimal events
     const orderId = (fullOrder && fullOrder.id) || eventWrapper.order_id;
-    const state = (fullOrder && fullOrder.state) || eventWrapper.state;
 
     if (!orderId) {
-      console.log("❌ No order_id present in event.");
+      console.log("❌ No order_id present in webhook payload.");
       return res.status(200).send("ok");
     }
 
-    // If we don't have items yet, try Orders API
+    const state =
+      (fullOrder && fullOrder.state) || eventWrapper.state || "OPEN";
+
+    // If webhook didn't include full order (no line_items), call Orders API
     if (!fullOrder || !Array.isArray(fullOrder.line_items)) {
       const fetched = await fetchOrderFromSquare(orderId);
       if (fetched) {
@@ -156,7 +219,7 @@ app.post("/square/webhook", async (req, res) => {
       }
     }
 
-    // ---------- ORDER NUMBER (bubble label) ----------
+    // ---------- Determine order number for bubble ----------
     let orderNumber = null;
     if (fullOrder) {
       orderNumber =
@@ -165,86 +228,99 @@ app.post("/square/webhook", async (req, res) => {
         fullOrder.display_id ||
         fullOrder.receipt_number ||
         (fullOrder.id ? fullOrder.id.slice(-6).toUpperCase() : null);
-    } else {
+    }
+    if (!orderNumber) {
       orderNumber = orderId.slice(-6).toUpperCase();
     }
 
-    // ---------- ITEMS ----------
+    // ---------- Build items with variations + modifiers ----------
+    const existing = orders[orderId] || {};
     let items = [];
+
     if (fullOrder && Array.isArray(fullOrder.line_items)) {
-      items = fullOrder.line_items.map((li) => ({
-        name: li.name || "Item",
-        quantity: toNumberQuantity(li.quantity || 1),
-        modifiers: Array.isArray(li.modifiers)
-          ? li.modifiers.map((m) => m.name).filter(Boolean)
-          : [],
-      }));
-    } else if (orders[orderId]?.items) {
-      // reuse items from previous event for same order
-      items = orders[orderId].items;
+      items = buildItemsFromLineItems(fullOrder.line_items, existing.items);
+    } else if (existing.items) {
+      items = existing.items;
     }
 
     const itemCount = items.reduce(
       (sum, it) => sum + toNumberQuantity(it.quantity),
       0
     );
-    const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
 
-    const existing = orders[orderId] || {};
-    const merged = {
+    const stateFromSquare =
+      typeof state === "string" ? state.toLowerCase() : "";
+
+    const orderObj = {
       orderId,
-      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
-      status: existing.status || "new", // kitchen taps control this
+      orderNumber,
+      status: existing.status || "new", // Kitchen controls this via taps
       createdAt: existing.createdAt || Date.now(),
       itemCount,
       items,
       stateFromSquare,
     };
 
-    orders[orderId] = merged;
+    orders[orderId] = orderObj;
 
-    console.log("✅ Final KDS order object:", merged);
+    console.log("✅ Final KDS order object:", orderObj);
 
     broadcast({
       type: "NEW_ORDER",
-      ...merged,
+      ...orderObj,
     });
 
     return res.status(200).send("ok");
   } catch (err) {
     console.error("Webhook Error:", err);
-    // 200 so Square doesn’t spam retries while we debug
+    // Return 200 so Square does not spam retries while we debug
     return res.status(200).send("error");
   }
 });
 
-// ---------------- Test endpoint ----------------
+// ------------------ Test Endpoint (manual simulation) ------------------
 
 app.get("/test-order", (req, res) => {
   const num = Math.floor(Math.random() * 900 + 100);
   const orderId = `TEST-${num}`;
-  const order = {
+
+  const items = [
+    {
+      name: "Classic (VertiDog)",
+      quantity: 1,
+      modifiers: ["Garlic White VertiSauce", "Ketchup"],
+    },
+    {
+      name: "Coca-Cola (Soda)",
+      quantity: 1,
+      modifiers: [],
+    },
+  ];
+
+  const orderObj = {
     orderId,
     orderNumber: String(num),
     status: "new",
     createdAt: Date.now(),
-    items: [
-      { name: "Hot Dog", quantity: 1, modifiers: [] },
-      { name: "Coke", quantity: 1, modifiers: [] },
-    ],
+    items,
+    itemCount: items.reduce(
+      (sum, it) => sum + toNumberQuantity(it.quantity),
+      0
+    ),
+    stateFromSquare: "open",
   };
-  order.itemCount = order.items.length;
-  orders[orderId] = order;
+
+  orders[orderId] = orderObj;
 
   broadcast({
     type: "NEW_ORDER",
-    ...order,
+    ...orderObj,
   });
 
   res.send(`Test order #${num} sent to KDS`);
 });
 
-// ---------------- Start server ----------------
+// ------------------ Start server ------------------
 
 server.listen(PORT, () => {
   console.log(`🚀 VertiDog KDS backend running on port ${PORT}`);
