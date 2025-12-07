@@ -226,26 +226,24 @@ app.post("/square/webhook", async (req, res) => {
 
     const existing = orders[orderId] || {};
     
-    // --- CANCELLATION LOGIC FIX ---
+    // --- ROBUST KDS STATUS DETERMINATION FIX ---
+    // 1. Start with the existing KDS status (preserving NEW, IN-PROGRESS, READY, DONE)
     let kdsStatus = existing.status || "new";
     
-    // Check for Square cancellation/closure state
+    // 2. Cancellation/Closure Override: If Square says it's canceled/closed, it takes precedence.
     if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
-        
-        // CRITICAL FIX: If the KDS has already completed or ready'd this order, 
-        // we set its status to 'cancelled' to log the event, 
-        // but we prevent it from being sent as a 'NEW' order to the KDS active screen.
-        if (kdsStatus === "ready" || kdsStatus === "done") {
-             // We allow the status to update to 'cancelled' for display in the completed list, 
-             // but this status is immediately ignored by the frontend's active filter.
-             kdsStatus = "cancelled";
-        } else {
-             // If it was 'new' or 'in-progress', it is truly cancelled and should be removed.
-             kdsStatus = "cancelled";
-        }
+        kdsStatus = "cancelled";
     } 
-    // END CANCELLATION LOGIC FIX
+    // IMPORTANT: Any other Square update (like state='OPEN') will use kdsStatus from step 1, 
+    // preventing it from reverting 'in-progress' orders back to 'new'.
     
+    // 3. Final Check (Prevent 'cancelled' orders from reverting back to 'new' if a non-cancellation 
+    // update follows the original refund webhook)
+    if (existing.status === "cancelled" && stateFromSquare !== "canceled" && stateFromSquare !== "closed") {
+         kdsStatus = "cancelled";
+    }
+    // --- END ROBUST KDS STATUS DETERMINATION FIX ---
+
     const merged = {
       orderId,
       orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
