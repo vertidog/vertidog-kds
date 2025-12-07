@@ -322,8 +322,8 @@
       padding: 0.4rem 0;
       border-bottom: 1px solid rgba(148, 163, 184, 0.1);
     }
-    .details-item-name strong { /* Target the item name explicitly */
-        font-weight: 700;
+    .details-item-name {
+      font-weight: 600;
     }
     .details-item-qty {
       color: var(--accent);
@@ -779,7 +779,7 @@
           b.setAttribute('draggable', true); // Enable dragging for active cards
           b.ondragstart = handleDragStart;
           b.ondragend = handleDragEnd;
-          b.onclick = () => window.cycleStatus(o.orderNumber); // Click handler
+          b.onclick = () => window.cycleStatus(o.orderNumber); // Re-added click handler
 
           const statusText = 
             o.status === "new" ? "NEW" : 
@@ -864,7 +864,7 @@
               .map(
                 (item) => `
                 <div class="details-item">
-                  <span class="details-item-name"><strong>${item.name}</strong></span>
+                  <span class="details-item-name">${item.name}</span>
                   <span class="details-item-qty">x${item.quantity}</span>
                 </div>
                 ${ 
