@@ -126,6 +126,16 @@
       font-size: 1.7rem;
       font-weight: 800;
     }
+    
+    /* ADDED TIMER CSS */
+    .bubble-timer {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 0.2rem;
+    }
+    /* END ADDED TIMER CSS */
+
     .bubble-meta {
       margin-top: 0.2rem;
       font-size: 0.75rem;
@@ -155,6 +165,19 @@
       background: radial-gradient(circle at 30% 0%, rgba(34, 197, 94, 0.8), rgba(15, 23, 42, 0.95));
       border-color: rgba(34, 197, 94, 0.85);
     }
+    
+    /* ADDED CANCELLATION CSS */
+    .bubble.cancelled {
+      background: #4b5563; /* Gray background */
+      border-color: #ef4444; /* Red border to signify cancellation */
+      box-shadow: none;
+      opacity: 0.9;
+    }
+    .bubble.cancelled .bubble-number {
+      color: #ef4444; /* Make the order number red */
+    }
+    /* END CANCELLATION CSS */
+
     .bubble.done {
       background: #111827;
       border-color: #374151;
@@ -300,7 +323,6 @@
     </aside>
   </div>
 
-  <!-- retro diner chime -->
   <audio id="ready-sound" preload="auto">
     <source src="/sounds/order-ready.mp3" type="audio/mpeg" />
   </audio>
@@ -326,9 +348,22 @@
     let preferredVoice = null;
     let announcementQueue = [];
     let isAnnouncing = false;
+    
+    // --- TIMER HELPER FUNCTION ---
+    function formatTimeElapsed(createdAt) {
+      if (!createdAt) return '0s';
+      const secondsElapsed = Math.floor(Math.max(0, Date.now() - createdAt) / 1000);
+      const minutes = Math.floor(secondsElapsed / 60);
+      const seconds = secondsElapsed % 60;
+      
+      if (minutes > 0) {
+        return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+      }
+      return `${seconds}s`;
+    }
 
     /* -----------------------------
-       TTS SETUP (pick nicer voice)
+      TTS SETUP (pick nicer voice)
     --------------------------------*/
     function loadVoices() {
       if (!("speechSynthesis" in window)) return;
@@ -407,7 +442,7 @@
     }
 
     /* -----------------------------
-       CONNECT TO WEBSOCKET
+      CONNECT TO WEBSOCKET
     --------------------------------*/
     function setConnectionState(connected) {
       const dot = connectionStatus.querySelector(".dot");
@@ -452,15 +487,13 @@
     }
 
     /* -----------------------------
-       HANDLE INCOMING MESSAGES
+      HANDLE INCOMING MESSAGES
     --------------------------------*/
     function handleMessage(msg) {
       switch (msg.type) {
         case "NEW_ORDER":
-          addOrUpdate(msg.orderNumber, "new", msg);
-          if (!selectedOrderNumber) {
-            selectedOrderNumber = msg.orderNumber;
-          }
+          addOrUpdate(msg.orderNumber, msg.status || "new", msg);
+          // Auto-select logic removed to prevent jarring pop-ups, especially for cancelled orders.
           break;
 
         case "SYNC_STATE":
@@ -480,7 +513,7 @@
     }
 
     /* -----------------------------
-       ORDER MANAGEMENT
+      ORDER MANAGEMENT
     --------------------------------*/
     function addOrUpdate(orderNumber, status, data = {}) {
       const existing = orders[orderNumber] || {};
@@ -491,11 +524,19 @@
         itemCount: data.itemCount ?? existing.itemCount ?? null,
         items: data.items || existing.items || [],
       };
+      
+      // LOGIC: If the incoming status is 'cancelled', deselect it immediately
+      if (status === 'cancelled') {
+        if (selectedOrderNumber === orderNumber) {
+          selectedOrderNumber = null;
+        }
+        return; // Skip immediate render (render() is called at the end of handleMessage)
+      }
     }
 
     function cycleStatus(orderNumber) {
       const o = orders[orderNumber];
-      if (!o) return;
+      if (!o || o.status === 'cancelled') return; // Do not cycle a cancelled order
 
       selectedOrderNumber = orderNumber;
 
@@ -539,17 +580,45 @@
         }
       }, 5000);
     }
+    
+    // --- TIMER UPDATE LOOP (Enable this after successful initial testing) ---
+    /*
+    function updateTimers() {
+      document.querySelectorAll('.bubble').forEach(bubbleEl => {
+        const orderNumber = bubbleEl.dataset.order;
+        // Find the order object using orderNumber (since the key is orderId)
+        const order = Object.values(orders).find(o => o.orderNumber === orderNumber);
+        
+        const timerEl = bubbleEl.querySelector('.bubble-timer');
+        
+        if (order && timerEl) {
+          timerEl.textContent = formatTimeElapsed(order.createdAt);
+          // Optional: Add basic urgency color change based on time elapsed
+          const secondsElapsed = Math.floor(Math.max(0, Date.now() - order.createdAt) / 1000);
+          if (secondsElapsed > 600) { // Over 10 minutes
+            timerEl.style.color = 'var(--progress)';
+          } else if (secondsElapsed > 300) { // Over 5 minutes
+            timerEl.style.color = 'var(--text)';
+          }
+        }
+      });
+    }
+    setInterval(updateTimers, 1000); 
+    */
+    // ----------------------------------------------------------------------
+
 
     /* -----------------------------
-       RENDERING
+      RENDERING
     --------------------------------*/
     function render() {
       const list = Object.values(orders).sort(
         (a, b) => a.createdAt - b.createdAt
       );
 
-      const active = list.filter((o) => o.status !== "done");
-      const done = list.filter((o) => o.status === "done");
+      // UPDATED FILTERING to exclude 'done' AND 'cancelled' orders from active view
+      const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
+      const done = list.filter((o) => o.status === "done" || o.status === "cancelled");
 
       // Active bubbles (top)
       bubbleContainer.innerHTML = "";
@@ -566,6 +635,7 @@
 
           b.innerHTML = `
             <div class="bubble-number">#${o.orderNumber}</div>
+            <div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div> 
             <div class="bubble-meta">${
               o.itemCount
                 ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}`
@@ -589,8 +659,9 @@
       doneContainer.innerHTML = "";
       done.forEach((o) => {
         const isSelected = o.orderNumber === selectedOrderNumber;
+        const statusClass = o.status === 'cancelled' ? 'cancelled' : 'done'; // Use cancelled class
         const b = document.createElement("div");
-        b.className = `bubble done${isSelected ? " selected" : ""}`;
+        b.className = `bubble ${statusClass}${isSelected ? " selected" : ""}`;
 
         // Click: select and show details, no state change
         b.onclick = () => {
@@ -605,7 +676,7 @@
               ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}`
               : ""
           }</div>
-          <div class="bubble-status">DONE</div>
+          <div class="bubble-status">${statusClass.toUpperCase()}</div>
         `;
         doneContainer.appendChild(b);
       });
@@ -632,6 +703,8 @@
           ? "IN PROGRESS"
           : o.status === "ready"
           ? "READY"
+          : o.status === "cancelled" // ADDED CANCELLATION CHECK
+          ? "CANCELLED"
           : "DONE";
 
       const items = o.items || [];
@@ -640,11 +713,31 @@
           ? items
               .map(
                 (item) => `
-            <div class="details-item">
-              <span class="details-item-name">${item.name}</span>
-              <span class="details-item-qty">x${item.quantity}</span>
-            </div>
-          `
+                <div class="details-item">
+                  <span class="details-item-name">${item.name}</span>
+                  <span class="details-item-qty">x${item.quantity}</span>
+                </div>
+                ${ // MODIFIER DISPLAY LOGIC
+                  item.modifiers && item.modifiers.length > 0
+                    ? item.modifiers
+                        .map(
+                          (modName) => `
+                            <div style="
+                              font-size: 0.8rem;
+                              color: var(--ready); 
+                              padding-left: 0.8rem;
+                              border-left: 2px solid var(--accent);
+                              margin-bottom: 0.4rem;
+                              line-height: 1.2;
+                            ">
+                              + ${modName}
+                            </div>
+                          `
+                        )
+                        .join("")
+                    : ""
+                }
+              `
               )
               .join("")
           : '<div class="details-panel-empty">No item details.</div>';
