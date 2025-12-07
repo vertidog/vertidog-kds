@@ -91,7 +91,7 @@ wss.on("connection", (ws) => {
       console.log("Client message received:", data.type);
 
       if (data.type === "ORDER_READY" && data.orderNumber) {
-        // Logic for a cook marking an order as ready
+        // Find order by orderNumber (since that's what the client sends)
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -99,7 +99,8 @@ wss.on("connection", (ws) => {
         if (orderToMark) {
           // Update the in-memory status
           orderToMark.status = "ready";
-          orders[orderToMark.orderId] = orderToMark;
+          // NOTE: We rely on the orderId key here for server-side persistence
+          orders[orderToMark.orderId] = orderToMark; 
 
           // Broadcast confirmation back to ALL clients
           broadcast({
@@ -225,7 +226,7 @@ app.post("/square/webhook", async (req, res) => {
 
     const existing = orders[orderId] || {};
     
-    // --- CANCELLATION LOGIC IMPLEMENTED ---
+    // --- CANCELLATION LOGIC ---
     let kdsStatus = existing.status || "new";
     if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
       kdsStatus = "cancelled";
