@@ -8,7 +8,6 @@ const orders = {}; // Central storage for order states
 
 // --- STATUS LOCK & ORDER MANAGEMENT ---
 
-// This set tracks order numbers that have reached a final, confirmed state (done/cancelled)
 const FINAL_STATUSES = ['done', 'cancelled'];
 const statusLock = new Set(); 
 
@@ -17,11 +16,6 @@ function generateRandomOrderNumber() {
     return Math.floor(Math.random() * 900) + 100;
 }
 
-function getActiveOrders() {
-    return Object.values(orders).filter(o => !FINAL_STATUSES.includes(o.status));
-}
-
-// Global broadcast function
 function broadcast(data) {
     const message = JSON.stringify(data);
     wss.clients.forEach(client => {
@@ -31,7 +25,6 @@ function broadcast(data) {
     });
 }
 
-// Handles incoming messages from KDS clients
 function handleClientMessage(client, message) {
     const msg = JSON.parse(message);
     const orderNumber = msg.orderNumber;
@@ -43,7 +36,6 @@ function handleClientMessage(client, message) {
 
     switch (msg.type) {
         case 'SYNC_REQUEST':
-            // Send all current orders to the newly connected client
             client.send(JSON.stringify({ 
                 type: 'SYNC_STATE', 
                 orders: Object.values(orders) 
@@ -51,32 +43,26 @@ function handleClientMessage(client, message) {
             break;
 
         case 'ORDER_READY':
-            // Client is asking to move to READY status (triggers announcement)
             if (orders[orderNumber] && orders[orderNumber].status !== 'done' && orders[orderNumber].status !== 'cancelled') {
                 orders[orderNumber].status = 'ready';
                 console.log(`Order #${orderNumber} set to READY.`);
-                // Confirm ready status back to all clients (triggers sound/timer)
                 broadcast({ type: 'ORDER_READY_CONFIRM', orderNumber });
             }
             break;
 
         case 'ORDER_REACTIVATED':
-            // Client dragged a 'done' or 'cancelled' order back to active state
             if (orders[orderNumber]) {
                 orders[orderNumber].status = 'in-progress';
                 console.log(`Order #${orderNumber} reactivated to IN-PROGRESS.`);
-                statusLock.delete(orderNumber); // Remove from the lock
-                // Broadcast the change
+                statusLock.delete(orderNumber);
                 broadcast({ type: 'NEW_ORDER', ...orders[orderNumber] });
             }
             break;
 
         case 'ORDER_SKIPPED_DONE':
-            // Client manually dragged an order to the done section
             if (orders[orderNumber]) {
                 orders[orderNumber].status = 'done';
                 console.log(`Order #${orderNumber} manually marked DONE.`);
-                // Broadcast the change
                 broadcast({ type: 'NEW_ORDER', ...orders[orderNumber] });
             }
             break;
@@ -89,14 +75,14 @@ function handleClientMessage(client, message) {
 // --- HTTP SERVER SETUP ---
 
 const server = http.createServer((req, res) => {
-    // 1. WebSocket Upgrade handling (Crucial for WebSocket connection)
+    // 1. WebSocket Upgrade handling
     if (req.url === '/ws') {
         server.on('upgrade', (req, socket, head) => {
             wss.handleUpgrade(req, socket, head, (ws) => {
                 wss.emit('connection', ws, req);
             });
         });
-        return; // WebSocket handled the request
+        return;
     }
 
     // 2. Test Order Endpoint
@@ -106,7 +92,7 @@ const server = http.createServer((req, res) => {
             orderNumber: newOrderNumber,
             status: 'new',
             createdAt: Date.now(),
-            // --- RICH ITEM DATA STRUCTURE (Simulating POS) ---
+            // --- RICH ITEM DATA STRUCTURE (Ensures separation) ---
             items: [
                 { 
                     name: "Classic Vertidog", 
@@ -114,7 +100,7 @@ const server = http.createServer((req, res) => {
                     modifiers: ["Ketchup", "Grilled Onions", "Add Chili"] 
                 },
                 { 
-                    name: "Veggie Vertidog", 
+                    name: "Veggie Vertidog", // This is the separate Vegetarian item
                     quantity: 1, 
                     modifiers: ["No Cheese", "Extra Pickles"] 
                 },
@@ -131,7 +117,6 @@ const server = http.createServer((req, res) => {
             ],
         };
 
-        // Calculate total item count for the bubble's small display
         newOrder.itemCount = newOrder.items.reduce((sum, item) => sum + item.quantity, 0);
         
         orders[newOrderNumber] = newOrder;
@@ -147,14 +132,14 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // 3. Static File Serving (KDS HTML and other assets)
+    // 3. Static File Serving
     let filePath = path.join(__dirname, req.url === '/' ? 'kitchen.html' : req.url);
     const extname = String(path.extname(filePath)).toLowerCase();
     const mimeTypes = {
         '.html': 'text/html',
         '.js': 'text/javascript',
         '.css': 'text/css',
-        '.mp3': 'audio/mpeg' // To support the chime sound
+        '.mp3': 'audio/mpeg'
     };
 
     const contentType = mimeTypes[extname] || 'application/octet-stream';
