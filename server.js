@@ -3,6 +3,7 @@
 // - Express + WebSocket
 // - Square Webhook + Orders API
 // - Umbrella item + variation + modifiers
+// - CANCELLED as a first-class status
 // ======================================
 
 const express = require("express");
@@ -10,8 +11,6 @@ const http = require("http");
 const { WebSocketServer } = require("ws");
 const bodyParser = require("body-parser");
 const path = require("path");
-
-// ------------------ Config ------------------
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -49,7 +48,7 @@ function buildItemsFromLineItems(lineItems, previousItems = []) {
   return lineItems.map((li) => {
     const qty = toNumberQuantity(li.quantity || 1);
 
-    const umbrella = li.name || ""; // e.g. "VertiDog", "Soda"
+    const umbrella = li.name || "";          // e.g. "VertiDog", "Soda"
     const variation = li.variation_name || ""; // e.g. "Classic", "Coca-Cola"
 
     let displayName;
@@ -105,11 +104,7 @@ async function fetchOrderFromSquare(orderId) {
     });
 
     if (!resp.ok) {
-      console.log(
-        "❌ Orders API error:",
-        resp.status,
-        resp.statusText
-      );
+      console.log("❌ Orders API error:", resp.status, resp.statusText);
       const text = await resp.text();
       console.log(text);
       return null;
@@ -137,7 +132,7 @@ const wss = new WebSocketServer({
 wss.on("connection", (ws) => {
   console.log("KDS connected");
 
-  // Send current state immediately
+  // Send current active-state immediately
   ws.send(
     JSON.stringify({
       type: "SYNC",
@@ -211,6 +206,13 @@ app.post("/square/webhook", async (req, res) => {
     const state =
       (fullOrder && fullOrder.state) || eventWrapper.state || "OPEN";
 
+    // Normalize state
+    const stateFromSquare =
+      typeof state === "string" ? state.toLowerCase() : "";
+
+    const isCancelledOrRefunded =
+      stateFromSquare.includes("cancel") || stateFromSquare.includes("refund");
+
     // If webhook didn't include full order (no line_items), call Orders API
     if (!fullOrder || !Array.isArray(fullOrder.line_items)) {
       const fetched = await fetchOrderFromSquare(orderId);
@@ -248,13 +250,36 @@ app.post("/square/webhook", async (req, res) => {
       0
     );
 
-    const stateFromSquare =
-      typeof state === "string" ? state.toLowerCase() : "";
+    // ---------- CANCELLED / REFUNDED FLOW ----------
+    if (isCancelledOrRefunded) {
+      const orderObj = {
+        orderId,
+        orderNumber,
+        status: "cancelled",
+        createdAt: existing.createdAt || Date.now(),
+        itemCount,
+        items,
+        stateFromSquare,
+      };
 
+      console.log("🚫 Order cancelled/refunded from Square:", orderObj);
+
+      // Remove from active store; client will show it in "recent completed" with CANCELLED status
+      delete orders[orderId];
+
+      broadcast({
+        type: "ORDER_CANCELLED",
+        ...orderObj,
+      });
+
+      return res.status(200).send("ok");
+    }
+
+    // ---------- NORMAL ORDER FLOW ----------
     const orderObj = {
       orderId,
       orderNumber,
-      status: existing.status || "new", // Kitchen controls this via taps
+      status: existing.status || "new", // kitchen controls status by tapping
       createdAt: existing.createdAt || Date.now(),
       itemCount,
       items,
@@ -273,7 +298,7 @@ app.post("/square/webhook", async (req, res) => {
     return res.status(200).send("ok");
   } catch (err) {
     console.error("Webhook Error:", err);
-    // Return 200 so Square does not spam retries while we debug
+    // Return 200 so Square doesn’t keep retrying
     return res.status(200).send("error");
   }
 });
