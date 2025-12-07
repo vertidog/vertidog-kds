@@ -15,7 +15,9 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Square credentials via env vars (Render)
+// ------------------ Square config ------------------
+
+// From Render environment variables
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN;
 const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || "production";
 
@@ -48,7 +50,7 @@ function buildItemsFromLineItems(lineItems, previousItems = []) {
   return lineItems.map((li) => {
     const qty = toNumberQuantity(li.quantity || 1);
 
-    const umbrella = li.name || "";          // e.g. "VertiDog", "Soda"
+    const umbrella = li.name || "";           // e.g. "VertiDog", "Soda"
     const variation = li.variation_name || ""; // e.g. "Classic", "Coca-Cola"
 
     let displayName;
@@ -203,15 +205,24 @@ app.post("/square/webhook", async (req, res) => {
       return res.status(200).send("ok");
     }
 
-    const state =
-      (fullOrder && fullOrder.state) || eventWrapper.state || "OPEN";
+    // --------- Detect state from the event payload itself ---------
+    // We want the transition state like CANCELED, even if fetched order is COMPLETED.
+    const rawState =
+      (objectWrapper.order_updated && objectWrapper.order_updated.state) ||
+      (objectWrapper.order_created && objectWrapper.order_created.state) ||
+      (objectWrapper.order && objectWrapper.order.state) ||
+      eventWrapper.state ||
+      "";
 
-    // Normalize state
     const stateFromSquare =
-      typeof state === "string" ? state.toLowerCase() : "";
+      typeof rawState === "string" ? rawState.toLowerCase() : "";
 
     const isCancelledOrRefunded =
-      stateFromSquare.includes("cancel") || stateFromSquare.includes("refund");
+      stateFromSquare.includes("cancel") ||
+      stateFromSquare.includes("refund") ||
+      (typeof body.type === "string" &&
+        (body.type.toLowerCase().includes("refund") ||
+         body.type.toLowerCase().includes("cancel")));
 
     // If webhook didn't include full order (no line_items), call Orders API
     if (!fullOrder || !Array.isArray(fullOrder.line_items)) {
