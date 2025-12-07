@@ -595,15 +595,12 @@
         const orderNumber = event.target.dataset.order;
         event.dataTransfer.setData('text/plain', orderNumber);
         event.target.classList.add('dragging');
-        // Prevent default click action during drag
-        event.target.onclick = null; 
+        // We no longer need to disable/re-enable the click handler here.
     }
 
     // Clean up after the drag ends
     function handleDragEnd(event) {
         event.target.classList.remove('dragging');
-        // Re-enable click action
-        event.target.onclick = () => window.cycleStatus(event.target.dataset.order);
     }
 
     // Allow drop operation
@@ -633,13 +630,13 @@
         if (targetType === 'active') {
             // Dragged to main screen -> Must become ACTIVE ('in-progress')
             orders[orderNumber].status = 'in-progress';
-            // OPTIONAL: Inform server that a 'done'/'cancelled' order is reactivated
-            // sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
+            // We should also inform the server to unlock the status if it was locked as 'done' or 'cancelled'
+            sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
         } else if (targetType === 'done') {
             // Dragged to completed section -> Must become DONE
             orders[orderNumber].status = 'done';
-            // OPTIONAL: Inform server that a 'new'/'in-progress' order is skipped to 'done'
-            // sendMessage({ type: "ORDER_SKIPPED_DONE", orderNumber: orderNumber });
+            // Inform server to mark it done
+            sendMessage({ type: "ORDER_SKIPPED_DONE", orderNumber: orderNumber });
         }
 
         selectedOrderNumber = orderNumber;
@@ -688,18 +685,24 @@
       }, 5000); // 5-second delay
     }
 
-
+    // This function handles both tap-to-cycle and click-to-select
     window.cycleStatus = function(orderNumber) {
       const o = orders[orderNumber];
-      // Allow cycling only if active status
-      if (!o || o.status === 'cancelled' || o.status === 'done') {
-         selectedOrderNumber = orderNumber;
+      
+      selectedOrderNumber = orderNumber; // Always select when tapping
+      
+      if (!o) {
          renderDetails();
          return;
       }
+      
+      // If the order is currently done or cancelled, just select it, don't cycle.
+      if (o.status === 'cancelled' || o.status === 'done') {
+         render();
+         return;
+      }
 
-      selectedOrderNumber = orderNumber;
-
+      // Active status cycling
       if (o.status === "new") {
         o.status = "in-progress";
       } else if (o.status === "in-progress") {
@@ -774,10 +777,10 @@
           const b = document.createElement("div");
           b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
-          b.setAttribute('draggable', true); // Enable dragging
+          b.setAttribute('draggable', true); // Enable dragging for active cards
           b.ondragstart = handleDragStart;
           b.ondragend = handleDragEnd;
-          b.onclick = () => window.cycleStatus(o.orderNumber); 
+          b.onclick = () => window.cycleStatus(o.orderNumber); // Re-added click handler
 
           const statusText = 
             o.status === "new" ? "NEW" : 
@@ -805,11 +808,11 @@
         const b = document.createElement("div");
         b.className = `bubble ${statusClass}${isSelected ? " selected" : ""}`;
         b.dataset.order = o.orderNumber;
-        b.setAttribute('draggable', true); // Enable dragging
+        b.setAttribute('draggable', true); // Enable dragging for done cards
         b.ondragstart = handleDragStart;
         b.ondragend = handleDragEnd;
 
-        // Click: select and show details, no state change
+        // Click: select and show details, but DO NOT cycle status.
         b.onclick = () => {
           selectedOrderNumber = o.orderNumber;
           render();
