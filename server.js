@@ -226,23 +226,24 @@ app.post("/square/webhook", async (req, res) => {
 
     const existing = orders[orderId] || {};
     
-    // --- ROBUST KDS STATUS DETERMINATION FIX ---
-    // 1. Start with the existing KDS status (preserving NEW, IN-PROGRESS, READY, DONE)
+    // --- ULTIMATE KDS STATUS LOCK FIX ---
+    
     let kdsStatus = existing.status || "new";
     
-    // 2. Cancellation/Closure Override: If Square says it's canceled/closed, it takes precedence.
+    // Rule 1: Cancellation is the only update that can override any KDS status.
     if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
         kdsStatus = "cancelled";
-    } 
-    // IMPORTANT: Any other Square update (like state='OPEN') will use kdsStatus from step 1, 
-    // preventing it from reverting 'in-progress' orders back to 'new'.
-    
-    // 3. Final Check (Prevent 'cancelled' orders from reverting back to 'new' if a non-cancellation 
-    // update follows the original refund webhook)
-    if (existing.status === "cancelled" && stateFromSquare !== "canceled" && stateFromSquare !== "closed") {
-         kdsStatus = "cancelled";
     }
-    // --- END ROBUST KDS STATUS DETERMINATION FIX ---
+    
+    // Rule 2 (THE CRITICAL PART): If the order already exists in our KDS memory 
+    // AND it has been touched (i.e., status is NOT 'new'), we NEVER override 
+    // the existing KDS status with a general Square update (like 'OPEN').
+    // This locks the order state based on kitchen action.
+    if (existing.status && existing.status !== 'new' && kdsStatus !== 'cancelled') {
+        kdsStatus = existing.status;
+    }
+    
+    // --- END ULTIMATE KDS STATUS LOCK FIX ---
 
     const merged = {
       orderId,
