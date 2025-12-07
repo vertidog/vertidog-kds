@@ -1,194 +1,149 @@
-// -----------------------
-// VertiDog KDS Backend
-// -----------------------
+// ===============================
+// VertiDog KDS Backend (Full)
+// ===============================
 
 const express = require("express");
+const { WebSocketServer } = require("ws");
 const bodyParser = require("body-parser");
-const http = require("http");
-const WebSocket = require("ws");
 const path = require("path");
-
 const app = express();
-const server = http.createServer(app);
 
-// WebSocket server on /ws
-const wss = new WebSocket.Server({
-  server,
-  path: "/ws",
-});
+// Render requires this — do NOT hardcode the port
+const PORT = process.env.PORT || 10000;
 
-// In-memory order store
-// { "155": { orderNumber, status, createdAt, itemCount, items: [...] } }
-const orders = {};
-
+// Parse JSON webhook bodies
 app.use(bodyParser.json());
 
-// -----------------------
-// HEALTH CHECK
-// -----------------------
-app.get("/healthz", (req, res) => {
-  res.status(200).send("OK");
-});
-
-// -----------------------
-// STATIC FILES (UI + Sounds)
-// -----------------------
+// Serve public folder (kitchen.html, sounds, etc.)
 app.use(express.static(path.join(__dirname, "public")));
 
-// -----------------------
-// SERVE KITCHEN SCREEN
-// -----------------------
-app.get("/kitchen", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "kitchen.html"));
+// In-memory store of orders
+let orders = {};
+
+// ======================================================
+//  WebSocket server for live KDS screens
+// ======================================================
+const server = app.listen(PORT, () => {
+  console.log(`🚀 VertiDog KDS backend running on port ${PORT}`);
 });
 
-// -----------------------
-// WEBSOCKET HANDLING
-// -----------------------
+const wss = new WebSocketServer({ server });
+
 wss.on("connection", (ws) => {
   console.log("KDS connected");
 
-  // Send full current state immediately on connection
-  ws.send(
-    JSON.stringify({
-      type: "SYNC_STATE",
-      orders: Object.values(orders),
-    })
-  );
-
-  ws.on("message", (msg) => {
-    try {
-      const data = JSON.parse(msg.toString());
-
-      // Kitchen → Server: order marked ready
-      if (data.type === "ORDER_READY") {
-        const orderNumber = data.orderNumber;
-
-        if (orders[orderNumber]) {
-          orders[orderNumber].status = "ready";
-
-          // Broadcast to ALL screens
-          broadcast({
-            type: "ORDER_READY_CONFIRM",
-            orderNumber,
-          });
-
-          console.log(`Order #${orderNumber} marked READY`);
-        }
-      }
-
-      // Kitchen → Server: requesting full sync
-      if (data.type === "SYNC_REQUEST") {
-        ws.send(
-          JSON.stringify({
-            type: "SYNC_STATE",
-            orders: Object.values(orders),
-          })
-        );
-      }
-    } catch (err) {
-      console.error("WebSocket error:", err);
-    }
+  ws.on("close", () => {
+    console.log("KDS disconnected");
   });
 
-  ws.on("close", () => console.log("KDS disconnected"));
+  // Send full state on connect
+  ws.send(
+    JSON.stringify({
+      type: "SYNC",
+      orders,
+    })
+  );
 });
 
-// -----------------------
-// BROADCAST FUNCTION
-// -----------------------
+// Helper: broadcast to all KDS screens
 function broadcast(obj) {
   const msg = JSON.stringify(obj);
-
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
+    if (client.readyState === 1) {
       client.send(msg);
     }
   });
 }
 
-// -----------------------
-// SQUARE WEBHOOK ENDPOINT
-// -----------------------
+// ======================================================
+//  Square Webhook Receiver
+// ======================================================
 app.post("/square/webhook", (req, res) => {
   try {
-    const event = req.body;
+    console.log("🔔 Square Webhook Received:", JSON.stringify(req.body));
 
-    console.log("Square Event:", event.type);
+    const eventType = req.body?.type;
+    console.log("Square Event:", eventType);
 
-    // We only care about "order.created" events
-    if (event.type === "order.created") {
-      const order = event.data.object.order;
+    // Extract order object safely
+    const payloadObj = req.body?.data?.object || {};
+    const order = payloadObj.order || payloadObj;
 
-      // -----------------------
-      //  GET ORDER NUMBER
-      // -----------------------
-      let orderNumber =
-        order.ticket_name || // BEST: user-entered ticket name
-        order.display_name || // fallback
-        (order.id ? order.id.slice(-4) : "0000"); // LAST RESORT: last 4 chars of order ID
-
-      // Extract NUMBERS ONLY so "Order #155" → "155"
-      const matched = orderNumber.match(/\d+/);
-      if (matched) orderNumber = matched[0];
-
-      // -----------------------
-      //  METADATA
-      // -----------------------
-      const itemCount = Array.isArray(order.line_items)
-        ? order.line_items.length
-        : null;
-
-      const createdAt = order.created_at
-        ? Date.parse(order.created_at)
-        : Date.now();
-
-      // Line item details for side panel
-      const items = Array.isArray(order.line_items)
-        ? order.line_items.map((li) => ({
-            name: li.name,
-            quantity: li.quantity,
-            note: li.note || null,
-          }))
-        : [];
-
-      // -----------------------
-      //  STORE ORDER IN MEMORY
-      // -----------------------
-      orders[orderNumber] = {
-        orderNumber,
-        status: "new",
-        createdAt,
-        itemCount,
-        items,
-      };
-
-      // -----------------------
-      //  BROADCAST TO KITCHEN
-      // -----------------------
-      broadcast({
-        type: "NEW_ORDER",
-        orderNumber,
-        createdAt,
-        itemCount,
-        items,
-      });
-
-      console.log(`New order received from Square: #${orderNumber}`);
+    if (!order) {
+      console.log("❗ No order object found in webhook payload.");
+      return res.status(200).send(); // always ACK Square
     }
 
-    res.sendStatus(200);
+    // Build order number safely with fallbacks
+    const orderNumber =
+      order.ticket_name ||
+      order.display_id ||
+      (order.id ? order.id.slice(-4) : "TEST");
+
+    // Extract line items safely
+    const lineItems = Array.isArray(order.line_items)
+      ? order.line_items
+      : [];
+
+    const items = lineItems.map((li) => ({
+      name: li.name || "Item",
+      quantity: Number(li.quantity || 1),
+    }));
+
+    const itemCount = items.reduce((sum, it) => sum + it.quantity, 0);
+
+    // Construct final clean order
+    const newOrder = {
+      orderNumber: String(orderNumber),
+      status: "new",
+      createdAt: Date.now(),
+      itemCount,
+      items,
+    };
+
+    console.log("✅ Parsed Webhook Order:", newOrder);
+
+    // Save to memory
+    orders[newOrder.orderNumber] = newOrder;
+
+    // Broadcast NEW ORDER to all kitchen screens
+    broadcast({
+      type: "NEW_ORDER",
+      ...newOrder,
+    });
+
+    return res.status(200).send(); // always return 200 to Square
   } catch (err) {
     console.error("Webhook Error:", err);
-    res.sendStatus(500);
+    return res.status(200).send(); // still ACK, avoid retries
   }
 });
 
-// -----------------------
-// START SERVER
-// -----------------------
-const PORT = process.env.PORT || 10000;
+// ======================================================
+//  Optional: endpoint to manually test orders
+// ======================================================
+app.get("/test-order", (req, res) => {
+  const testNum = Math.floor(Math.random() * 900 + 100);
+  const newOrder = {
+    orderNumber: String(testNum),
+    status: "new",
+    createdAt: Date.now(),
+    itemCount: 2,
+    items: [
+      { name: "Hot Dog", quantity: 1 },
+      { name: "Coke", quantity: 1 },
+    ],
+  };
 
-server.listen(PORT, () => {
-  console.log(`🚀 VertiDog KDS backend running on port ${PORT}`);
+  orders[newOrder.orderNumber] = newOrder;
+  broadcast({ type: "NEW_ORDER", ...newOrder });
+
+  res.send("Test order sent to KDS!");
+});
+
+// ======================================================
+//  Default Route
+// ======================================================
+app.get("/", (req, res) => {
+  res.send("VertiDog KDS backend running.");
 });
