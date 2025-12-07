@@ -585,8 +585,7 @@
       triggerReadyActions(orderNumber, options);
     }
     
-    // --- TIMER UPDATE LOOP (Enable this after successful initial testing) ---
-    /*
+    // --- TIMER UPDATE LOOP (Optional, but recommended) ---
     function updateTimers() {
       document.querySelectorAll('.bubble').forEach(bubbleEl => {
         const orderNumber = bubbleEl.dataset.order;
@@ -596,18 +595,12 @@
         
         if (order && timerEl) {
           timerEl.textContent = formatTimeElapsed(order.createdAt);
-          const secondsElapsed = Math.floor(Math.max(0, Date.now() - order.createdAt) / 1000);
-          if (secondsElapsed > 600) { 
-            timerEl.style.color = 'var(--progress)';
-          } else if (secondsElapsed > 300) { 
-            timerEl.style.color = 'var(--text)';
-          }
+          // Optional: Add color changes based on time elapsed
         }
       });
     }
     setInterval(updateTimers, 1000); 
-    */
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------
 
 
     /* -----------------------------
