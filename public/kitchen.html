@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>VertiDog Kitchen Screen</title>
+  <title>VertiDog KDS: Kitchen Display System</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
+    /* VARIABLES */
     :root {
       --bg: #050816;
       --card-bg: #0b1020;
-      --new: #3b82f6;
-      --progress: #f97316;
-      --ready: #22c55e;
+      --new: #3b82f6;      /* Blue */
+      --progress: #f97316; /* Orange */
+      --ready: #22c55e;    /* Green */
+      --cancel: #ef4444;   /* Red */
       --text: #e5e7eb;
       --muted: #6b7280;
       --accent: #a855f7;
@@ -28,6 +30,8 @@
       display: flex;
       flex-direction: column;
     }
+    
+    /* HEADER */
     header {
       padding: 0.75rem 1.25rem;
       display: flex;
@@ -73,7 +77,7 @@
       box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
     }
 
-    /* Layout: bubbles on left, details on right */
+    /* LAYOUT: Main Content */
     .layout {
       flex: 2.2;
       display: flex;
@@ -86,19 +90,22 @@
       min-width: 0;
     }
 
+    /* MAIN ACTIVE GRID */
     main {
       flex: 1;
       padding: 0.75rem;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Larger bubbles */
       gap: 0.75rem;
+      overflow-y: auto;
     }
 
+    /* BUBBLE STYLES */
     .bubble {
       position: relative;
       width: 100%;
-      aspect-ratio: 1 / 1;
-      border-radius: 999px;
+      min-height: 140px; /* Use min-height for slightly rectangular cards */
+      border-radius: 12px; /* Square corners */
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -106,8 +113,7 @@
       cursor: pointer;
       border: 2px solid transparent;
       box-shadow:
-        0 10px 25px rgba(0, 0, 0, 0.5),
-        0 0 20px rgba(59, 130, 246, 0.2);
+        0 4px 12px rgba(0, 0, 0, 0.4);
       transition:
         transform 0.1s ease-out,
         box-shadow 0.2s ease-out,
@@ -116,121 +122,151 @@
         opacity 0.3s ease-out;
       user-select: none;
       touch-action: manipulation;
-      padding: 0.3rem;
+      padding: 1rem 0.5rem;
       text-align: center;
     }
     .bubble:active {
-      transform: scale(0.96);
+      transform: scale(0.98);
     }
     .bubble-number {
-      font-size: 1.7rem;
+      font-size: 2.5rem;
       font-weight: 800;
+      line-height: 1;
     }
-    
     .bubble-timer {
       font-size: 1rem;
       font-weight: 700;
       color: var(--text);
       margin-top: 0.2rem;
     } 
-
     .bubble-meta {
-      margin-top: 0.2rem;
-      font-size: 0.75rem;
+      margin-top: 0.4rem;
+      font-size: 0.85rem;
       color: var(--muted);
     }
     .bubble-status {
       position: absolute;
-      bottom: 0.35rem;
-      left: 50%;
-      transform: translateX(-50%);
+      top: 0.5rem;
+      right: 0.5rem;
       font-size: 0.65rem;
       padding: 0.1rem 0.5rem;
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      color: rgba(209, 213, 219, 0.9);
-    }
-    .bubble.new {
-      background: radial-gradient(circle at 30% 0%, rgba(59, 130, 246, 0.75), rgba(15, 23, 42, 0.95));
-      border-color: rgba(59, 130, 246, 0.75);
-    }
-    .bubble.in-progress {
-      background: radial-gradient(circle at 30% 0%, rgba(249, 115, 22, 0.8), rgba(15, 23, 42, 0.95));
-      border-color: rgba(249, 115, 22, 0.85);
-    }
-    .bubble.ready {
-      background: radial-gradient(circle at 30% 0%, rgba(34, 197, 94, 0.8), rgba(15, 23, 42, 0.95));
-      border-color: rgba(34, 197, 94, 0.85);
-    }
-    
-    .bubble.cancelled {
-      background: #4b5563; /* Gray background */
-      border-color: #ef4444; /* Red border to signify cancellation */
-      box-shadow: none;
-      opacity: 0.9;
-    }
-    .bubble.cancelled .bubble-number {
-      color: #ef4444; /* Make the order number red */
+      border-radius: 4px;
+      font-weight: 600;
     }
 
-    .bubble.done {
-      background: #111827;
-      border-color: #374151;
-      box-shadow: none;
-      opacity: 0.6;
-      transform: scale(0.85);
+    /* Status Specific Styles */
+    .bubble.new {
+      background: var(--card-bg);
+      border-color: var(--new);
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
     }
-    .bubble.done .bubble-number {
-      font-size: 1.1rem;
+    .bubble.new .bubble-status {
+      background: var(--new);
+      color: #fff;
+    }
+
+    .bubble.in-progress {
+      background: var(--card-bg);
+      border-color: var(--progress);
+      box-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
+    }
+    .bubble.in-progress .bubble-status {
+      background: var(--progress);
+      color: #fff;
+    }
+    
+    .bubble.ready {
+      background: radial-gradient(circle at center, rgba(34, 197, 94, 0.2), var(--card-bg) 70%);
+      border-color: var(--ready);
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.7);
+    }
+    .bubble.ready .bubble-status {
+      background: var(--ready);
+      color: var(--card-bg);
     }
 
     .bubble.selected {
       box-shadow:
-        0 0 0 2px rgba(168, 85, 247, 0.9),
+        0 0 0 4px var(--accent),
         0 10px 25px rgba(0, 0, 0, 0.6);
-      border-color: rgba(168, 85, 247, 0.9);
+      border-color: var(--accent);
+      transform: scale(1.02);
     }
 
-    .empty-state {
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      color: var(--muted);
-      gap: 0.4rem;
-      opacity: 0.8;
-      text-align: center;
-    }
-
-    /* Completed section */
+    /* COMPLETED SECTION */
     #completed-section {
-      padding: 0.25rem 0.75rem 0.75rem;
+      padding: 0.5rem 0.75rem 0.75rem;
       border-top: 1px solid rgba(15, 23, 42, 0.9);
+      background: #020617;
     }
     .completed-title {
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       text-transform: uppercase;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.1em;
       color: var(--muted);
       margin-bottom: 0.3rem;
     }
     .completed-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      display: flex;
       gap: 0.4rem;
+      overflow-x: auto;
+      padding-bottom: 0.3rem;
+    }
+    .completed-grid .bubble {
+      width: 80px;
+      min-width: 80px;
+      height: 80px;
+      min-height: 80px;
+      border-radius: 6px;
+      padding: 0;
+      opacity: 0.8;
+      box-shadow: none;
+      transition: opacity 0.2s;
+    }
+    .completed-grid .bubble-number {
+      font-size: 1.2rem;
+    }
+    .completed-grid .bubble-meta {
+      display: none;
+    }
+    .completed-grid .bubble-status {
+      position: static;
+      transform: none;
+      margin-top: 0.2rem;
+      padding: 0;
+      background: transparent;
+      font-size: 0.6rem;
+      font-weight: 500;
+      color: var(--muted);
     }
 
-    /* Details panel */
+    .bubble.done {
+      background: #1f2937; /* Darker gray for completed */
+      border-color: #374151;
+      opacity: 0.7;
+    }
+    .bubble.done .bubble-number {
+      color: var(--text);
+    }
+    
+    .bubble.cancelled {
+      background: #111827;
+      border-color: var(--cancel);
+      opacity: 0.9;
+    }
+    .bubble.cancelled .bubble-number {
+      color: var(--cancel);
+    }
+
+    /* DETAILS PANEL */
     .details-panel {
       flex: 1;
       border-left: 1px solid rgba(148, 163, 184, 0.25);
-      padding: 0.75rem;
+      padding: 1rem;
       background: radial-gradient(circle at top, #020617, #020617 60%, #000 100%);
-      font-size: 0.85rem;
-      min-width: 220px;
-      max-width: 320px;
+      font-size: 0.9rem;
+      min-width: 250px;
+      max-width: 350px;
       display: flex;
       flex-direction: column;
     }
@@ -239,21 +275,24 @@
       margin-top: 0.5rem;
     }
     .details-order-title {
-      font-weight: 600;
+      font-weight: 700;
       margin-bottom: 0.25rem;
-      font-size: 0.95rem;
+      font-size: 1.2rem;
+      color: var(--accent);
     }
     .details-meta {
-      font-size: 0.8rem;
+      font-size: 0.85rem;
       color: var(--muted);
-      margin-bottom: 0.75rem;
+      margin-bottom: 1rem;
     }
     .details-items-title {
       text-transform: uppercase;
       letter-spacing: 0.12em;
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       color: var(--muted);
-      margin-bottom: 0.25rem;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      padding-bottom: 0.3rem;
     }
     .details-items {
       flex: 1;
@@ -262,16 +301,29 @@
     .details-item {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 0.3rem;
+      align-items: center;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
     }
     .details-item-name {
-      color: var(--text);
+      font-weight: 600;
     }
     .details-item-qty {
-      color: var(--muted);
-      font-size: 0.8rem;
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 1rem;
     }
+    .details-modifiers {
+        font-size: 0.8rem;
+        color: var(--ready); 
+        padding-left: 1rem;
+        border-left: 2px solid var(--ready);
+        margin: 0.2rem 0 0.6rem;
+        line-height: 1.3;
+        font-style: italic;
+        opacity: 0.9;
+    }
+
 
     @media (max-width: 900px) {
       .layout {
@@ -281,7 +333,10 @@
         max-width: none;
         border-left: none;
         border-top: 1px solid rgba(148, 163, 184, 0.25);
-        min-height: 140px;
+        min-height: 200px;
+      }
+      main {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
       }
     }
   </style>
@@ -289,8 +344,8 @@
 <body>
   <header>
     <div class="title">
-      <h1>VERTIDOG KITCHEN</h1>
-      <span class="subtitle">Tap bubbles to advance: NEW → IN PROGRESS → READY</span>
+      <h1>VERTIDOG KDS</h1>
+      <span class="subtitle">TAP CARD to advance status: NEW → IN PROGRESS → READY</span>
     </div>
     <div class="status-pill" id="connection-status">
       <span class="dot"></span>
@@ -307,14 +362,14 @@
       </main>
 
       <section id="completed-section">
-        <div class="completed-title">Recently completed</div>
+        <div class="completed-title">Recently Completed / Cancelled</div>
         <div id="done-container" class="completed-grid"></div>
       </section>
     </div>
 
     <aside id="details-panel" class="details-panel">
       <div class="details-panel-empty">
-        Select an order bubble to see order details.
+        Select an order card to see itemized details and prep notes.
       </div>
     </aside>
   </div>
@@ -336,7 +391,6 @@
     const detailsPanel = document.getElementById("details-panel");
     const doneContainer = document.getElementById("done-container");
 
-    // ORDERS MAP IS KEYED BY orderNumber
     const orders = {}; 
     let socket;
     let selectedOrderNumber = null;
@@ -524,11 +578,11 @@
         orderId: data.orderId || existing.orderId,
       };
       
+      // If order is cancelled, ensure it's unselected
       if (status === 'cancelled') {
         if (selectedOrderNumber === orderNumber) {
           selectedOrderNumber = null;
         }
-        return;
       }
     }
 
@@ -551,9 +605,9 @@
     }
 
 
-    function cycleStatus(orderNumber) {
+    window.cycleStatus = function(orderNumber) {
       const o = orders[orderNumber];
-      if (!o || o.status === 'cancelled') return;
+      if (!o || o.status === 'cancelled' || o.status === 'done') return;
 
       selectedOrderNumber = orderNumber;
 
@@ -585,7 +639,7 @@
       triggerReadyActions(orderNumber, options);
     }
     
-    // --- TIMER UPDATE LOOP (Optional, but recommended) ---
+    // --- TIMER UPDATE LOOP ---
     function updateTimers() {
       document.querySelectorAll('.bubble').forEach(bubbleEl => {
         const orderNumber = bubbleEl.dataset.order;
@@ -595,7 +649,6 @@
         
         if (order && timerEl) {
           timerEl.textContent = formatTimeElapsed(order.createdAt);
-          // Optional: Add color changes based on time elapsed
         }
       });
     }
@@ -612,7 +665,7 @@
         (a, b) => a.createdAt - b.createdAt
       );
 
-      // UPDATED FILTERING: Active orders are NOT 'done' and NOT 'cancelled'
+      // Active orders are NOT 'done' and NOT 'cancelled'
       const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
       
       // Completed/Done orders ARE 'done' OR 'cancelled'
@@ -629,25 +682,20 @@
           const b = document.createElement("div");
           b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
-          b.onclick = () => cycleStatus(o.orderNumber);
+          // Set window.cycleStatus for console testing/direct click
+          b.onclick = () => window.cycleStatus(o.orderNumber); 
+
+          const statusText = 
+            o.status === "new" ? "NEW" : 
+            o.status === "in-progress" ? "IN PROGRESS" : "READY";
 
           b.innerHTML = `
             <div class="bubble-number">#${o.orderNumber}</div>
             <div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div> 
-            <div class="bubble-meta">${
-              o.itemCount
-                ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}`
-                : ""
-            }</div>
-            <div class="bubble-status">
-              ${
-                o.status === "new"
-                  ? "NEW"
-                  : o.status === "in-progress"
-                  ? "IN PROGRESS"
-                  : "READY"
-              }
+            <div class="bubble-meta">
+              ${o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : ""}
             </div>
+            <div class="bubble-status">${statusText}</div>
           `;
           bubbleContainer.appendChild(b);
         });
@@ -658,8 +706,11 @@
       done.forEach((o) => {
         const isSelected = o.orderNumber === selectedOrderNumber;
         const statusClass = o.status === 'cancelled' ? 'cancelled' : 'done';
+        const statusText = statusClass.toUpperCase();
+
         const b = document.createElement("div");
         b.className = `bubble ${statusClass}${isSelected ? " selected" : ""}`;
+        b.dataset.order = o.orderNumber;
 
         // Click: select and show details, no state change
         b.onclick = () => {
@@ -669,12 +720,7 @@
 
         b.innerHTML = `
           <div class="bubble-number">#${o.orderNumber}</div>
-          <div class="bubble-meta">${
-            o.itemCount
-              ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}`
-              : ""
-          }</div>
-          <div class="bubble-status">${statusClass.toUpperCase()}</div>
+          <div class="bubble-status">${statusText}</div>
         `;
         doneContainer.appendChild(b);
       });
@@ -685,10 +731,17 @@
     function renderDetails() {
       const o = selectedOrderNumber ? orders[selectedOrderNumber] : null; 
 
+      // Remove selected class from all bubbles first
+      document.querySelectorAll('.bubble').forEach(b => b.classList.remove('selected'));
+      // Add selected class to the currently selected bubble
+      if(selectedOrderNumber) {
+        document.querySelector(`.bubble[data-order="${selectedOrderNumber}"]`)?.classList.add('selected');
+      }
+
       if (!o) {
         detailsPanel.innerHTML = `
           <div class="details-panel-empty">
-            Select an order bubble to see order details.
+            Select an order card to see itemized details and prep notes.
           </div>
         `;
         return;
@@ -720,14 +773,7 @@
                     ? item.modifiers
                         .map(
                           (modName) => `
-                            <div style="
-                              font-size: 0.8rem;
-                              color: var(--ready); 
-                              padding-left: 0.8rem;
-                              border-left: 2px solid var(--accent);
-                              margin-bottom: 0.4rem;
-                              line-height: 1.2;
-                            ">
+                            <div class="details-modifiers">
                               + ${modName}
                             </div>
                           `
@@ -743,11 +789,8 @@
       detailsPanel.innerHTML = `
         <div class="details-order-title">Order #${o.orderNumber}</div>
         <div class="details-meta">
-          Status: ${statusLabel}<br/>
-          Items: ${
-            o.itemCount ??
-            (o.items && o.items.length ? o.items.length : 0)
-          }
+          Status: <strong>${statusLabel}</strong><br/>
+          Items: ${o.itemCount ?? (o.items && o.items.length ? o.items.length : 0)}
         </div>
         <div class="details-items-title">Items</div>
         <div class="details-items">
