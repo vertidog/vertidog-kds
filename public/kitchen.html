@@ -397,9 +397,8 @@
     </aside>
   </div>
 
-  <audio id="ready-sound" preload="auto">
-    <source src="/sounds/order-ready.mp3" type="audio/mpeg" />
-  </audio>
+  <audio id="ready-sound" preload="auto"></audio>
+
 
   <script>
     const WS_URL =
@@ -497,20 +496,9 @@
           playNextAnnouncement();
         }
       };
-
-      try {
-        readySound.currentTime = 0;
-        readySound.onended = () => {
-          readySound.onended = null;
-          doTTS();
-        };
-        readySound.play().catch(() => {
-          readySound.onended = null;
-          doTTS();
-        });
-      } catch (e) {
-        doTTS();
-      }
+      
+      // Since the source is removed, we just rely on TTS now
+      doTTS(); 
     }
 
     /* -----------------------------
