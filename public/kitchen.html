@@ -294,7 +294,7 @@
     </div>
     <div class="status-pill" id="connection-status">
       <span class="dot"></span>
-      <span>Connecting…</span>
+      <span>Connected</span>
     </div>
   </header>
 
@@ -336,7 +336,7 @@
     const detailsPanel = document.getElementById("details-panel");
     const doneContainer = document.getElementById("done-container");
 
-    // ORDERS MAP IS NOW KEYED BY orderNumber
+    // ORDERS MAP IS KEYED BY orderNumber
     const orders = {}; 
     let socket;
     let selectedOrderNumber = null;
@@ -490,7 +490,6 @@
       switch (msg.type) {
         case "NEW_ORDER":
           addOrUpdate(msg.orderNumber, msg.status || "new", msg);
-          // Auto-select logic removed
           break;
 
         case "SYNC_STATE":
@@ -503,7 +502,8 @@
           break;
 
         case "ORDER_READY_CONFIRM":
-          markReady(msg.orderNumber, { playSound: true });
+          // When the server confirms, we mark it ready and trigger the completion timeout.
+          markReady(msg.orderNumber, { playSound: true }); 
           break;
       }
       render();
@@ -513,7 +513,6 @@
       ORDER MANAGEMENT
     --------------------------------*/
     function addOrUpdate(orderNumber, status, data = {}) {
-      // FIX: Use orderNumber as the key for the client-side map
       const existing = orders[orderNumber] || {}; 
       
       orders[orderNumber] = {
@@ -522,21 +521,39 @@
         createdAt: data.createdAt || existing.createdAt || Date.now(),
         itemCount: data.itemCount ?? existing.itemCount ?? null,
         items: data.items || existing.items || [],
-        orderId: data.orderId || existing.orderId, // Keep orderId for completeness
+        orderId: data.orderId || existing.orderId,
       };
       
-      // LOGIC: If the incoming status is 'cancelled', deselect it immediately
       if (status === 'cancelled') {
         if (selectedOrderNumber === orderNumber) {
           selectedOrderNumber = null;
         }
-        return; // Skip immediate render (render() is called at the end of handleMessage)
+        return;
       }
     }
 
+    function triggerReadyActions(orderNumber, options = {}) {
+      const o = orders[orderNumber];
+      if (!o) return;
+    
+      if (options.playSound) {
+        queueAnnouncement(orderNumber);
+      }
+    
+      // Set timer to move to 'done' after 5 seconds
+      setTimeout(() => {
+        const oCheck = orders[orderNumber];
+        if (oCheck && oCheck.status === "ready") {
+          oCheck.status = "done";
+          render();
+        }
+      }, 5000); // 5-second delay
+    }
+
+
     function cycleStatus(orderNumber) {
       const o = orders[orderNumber];
-      if (!o || o.status === 'cancelled') return; // Do not cycle a cancelled order
+      if (!o || o.status === 'cancelled') return;
 
       selectedOrderNumber = orderNumber;
 
@@ -545,12 +562,11 @@
       } else if (o.status === "in-progress") {
         o.status = "ready";
 
+        // 1. Send Ready status to the server
         sendMessage({ type: "ORDER_READY", orderNumber });
 
-        // Enqueue announcement (chime + TTS)
-        queueAnnouncement(orderNumber);
-
-        moveToDoneAfterDelay(orderNumber);
+        // 2. Client immediately initiates the ready actions (sound/TTS and the move-to-done timeout)
+        triggerReadyActions(orderNumber, { playSound: true });
       }
 
       render();
@@ -558,27 +574,15 @@
 
     function markReady(orderNumber, options = {}) {
       const o = orders[orderNumber];
-      if (!o) return;
+      if (!o || o.status === 'done' || o.status === 'cancelled') return;
 
+      // Ensure local status is "ready"
       o.status = "ready";
       selectedOrderNumber = orderNumber;
       render();
 
-      if (options.playSound) {
-        queueAnnouncement(orderNumber);
-      }
-
-      moveToDoneAfterDelay(orderNumber);
-    }
-
-    function moveToDoneAfterDelay(orderNumber) {
-      setTimeout(() => {
-        const o = orders[orderNumber];
-        if (o && o.status === "ready") {
-          o.status = "done";
-          render();
-        }
-      }, 5000);
+      // Trigger ready actions (sound, TTS, and 5-second move to DONE)
+      triggerReadyActions(orderNumber, options);
     }
     
     // --- TIMER UPDATE LOOP (Enable this after successful initial testing) ---
@@ -586,18 +590,16 @@
     function updateTimers() {
       document.querySelectorAll('.bubble').forEach(bubbleEl => {
         const orderNumber = bubbleEl.dataset.order;
-        // Since orders is now keyed by orderNumber, finding is easy
         const order = orders[orderNumber]; 
         
         const timerEl = bubbleEl.querySelector('.bubble-timer');
         
         if (order && timerEl) {
           timerEl.textContent = formatTimeElapsed(order.createdAt);
-          // Optional: Add basic urgency color change based on time elapsed
           const secondsElapsed = Math.floor(Math.max(0, Date.now() - order.createdAt) / 1000);
-          if (secondsElapsed > 600) { // Over 10 minutes
+          if (secondsElapsed > 600) { 
             timerEl.style.color = 'var(--progress)';
-          } else if (secondsElapsed > 300) { // Over 5 minutes
+          } else if (secondsElapsed > 300) { 
             timerEl.style.color = 'var(--text)';
           }
         }
@@ -662,7 +664,7 @@
       doneContainer.innerHTML = "";
       done.forEach((o) => {
         const isSelected = o.orderNumber === selectedOrderNumber;
-        const statusClass = o.status === 'cancelled' ? 'cancelled' : 'done'; // Use cancelled class
+        const statusClass = o.status === 'cancelled' ? 'cancelled' : 'done';
         const b = document.createElement("div");
         b.className = `bubble ${statusClass}${isSelected ? " selected" : ""}`;
 
@@ -688,7 +690,6 @@
     }
 
     function renderDetails() {
-      // FIX: Lookup order by selectedOrderNumber (which is now the key)
       const o = selectedOrderNumber ? orders[selectedOrderNumber] : null; 
 
       if (!o) {
@@ -721,7 +722,7 @@
                   <span class="details-item-name">${item.name}</span>
                   <span class="details-item-qty">x${item.quantity}</span>
                 </div>
-                ${ // MODIFIER DISPLAY LOGIC
+                ${ 
                   item.modifiers && item.modifiers.length > 0
                     ? item.modifiers
                         .map(
