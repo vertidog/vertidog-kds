@@ -1,5 +1,5 @@
 // ===============================
-// VertiDog KDS Backend – Robust Square Parsing
+// VertiDog KDS Backend – with Square Orders API
 // ===============================
 
 const express = require("express");
@@ -11,13 +11,15 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// ---------------- HTTP + WebSocket server ----------------
+// For Square Orders API
+const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN;
+const SQUARE_ENV = process.env.SQUARE_ENV || "production"; // or "sandbox"
+const SQUARE_BASE_URL =
+  SQUARE_ENV === "sandbox"
+    ? "https://connect.squareupsandbox.com"
+    : "https://connect.squareup.com";
 
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
-
-// In-memory order store so we can merge multiple events
-// Shape: { [orderId]: { orderId, orderNumber, status, createdAt, itemCount, items[] } }
+// In-memory store keyed by orderId
 const orders = {};
 
 // ---------------- Helpers ----------------
@@ -28,20 +30,59 @@ function toNumberQuantity(q) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Websocket broadcast helper
 function broadcast(msgObj) {
   const data = JSON.stringify(msgObj);
   wss.clients.forEach((client) => {
-    if (client.readyState === 1) {
-      client.send(data);
-    }
+    if (client.readyState === 1) client.send(data);
   });
 }
+
+// Fetch full order from Square if webhook was minimal
+async function fetchOrderFromSquare(orderId) {
+  if (!SQUARE_ACCESS_TOKEN) {
+    console.log("⚠️ No SQUARE_ACCESS_TOKEN set, skipping Orders API fetch.");
+    return null;
+  }
+
+  try {
+    const resp = await fetch(`${SQUARE_BASE_URL}/v2/orders/${orderId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${SQUARE_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+        "Square-Version": "2024-03-20", // any recent date works
+      },
+    });
+
+    if (!resp.ok) {
+      console.log(
+        "❌ Square Orders API error:",
+        resp.status,
+        resp.statusText
+      );
+      const text = await resp.text();
+      console.log(text);
+      return null;
+    }
+
+    const json = await resp.json();
+    console.log("✅ Orders API fetched order:", JSON.stringify(json));
+    return json.order || null;
+  } catch (err) {
+    console.log("❌ Orders API fetch failed:", err);
+    return null;
+  }
+}
+
+// ---------------- HTTP + WebSocket server ----------------
+
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws) => {
   console.log("KDS connected");
 
-  // On connect, send current state
+  // send current state on connect
   ws.send(
     JSON.stringify({
       type: "SYNC",
@@ -49,12 +90,10 @@ wss.on("connection", (ws) => {
     })
   );
 
-  ws.on("close", () => {
-    console.log("KDS disconnected");
-  });
+  ws.on("close", () => console.log("KDS disconnected"));
 });
 
-// ---------------- Static files ----------------
+// ---------------- Middleware + static ----------------
 
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
@@ -63,13 +102,13 @@ app.get("/kitchen", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "kitchen.html"));
 });
 
-app.get("/", (req, res) => {
-  res.redirect("/kitchen");
-});
+app.get("/", (req, res) => res.redirect("/kitchen"));
 
-// ---------------- Square webhook ----------------
+app.get("/healthz", (req, res) => res.status(200).send("OK"));
 
-app.post("/square/webhook", (req, res) => {
+// ---------------- Square Webhook ----------------
+
+app.post("/square/webhook", async (req, res) => {
   try {
     const body = req.body || {};
     console.log("🔔 Square Webhook Received:", JSON.stringify(body));
@@ -80,9 +119,10 @@ app.post("/square/webhook", (req, res) => {
     const dataObj = body.data || {};
     const objectWrapper = dataObj.object || {};
 
-    // Square sends a few different shapes; support as many as possible:
-
-    // Newer style: data.object.order
+    // eventWrapper might be:
+    // - { order: { ... } }
+    // - { order_created: { order, order_id, state } }
+    // - { order_updated: { order, order_id, state } }
     let eventWrapper =
       objectWrapper.order ||
       objectWrapper.order_created ||
@@ -90,14 +130,16 @@ app.post("/square/webhook", (req, res) => {
       null;
 
     if (!eventWrapper) {
-      console.log("❌ No order wrapper (order / order_created / order_updated).");
+      console.log(
+        "❌ No order wrapper (order / order_created / order_updated)."
+      );
       return res.status(200).send("ok");
     }
 
-    // Try to get a full order resource if present
+    // fullOrder only exists if webhook carried the full resource
     let fullOrder = eventWrapper.order || null;
 
-    // Extract core metadata whether or not we have fullOrder
+    // orderId / state appear even in minimal events
     const orderId = (fullOrder && fullOrder.id) || eventWrapper.order_id;
     const state = (fullOrder && fullOrder.state) || eventWrapper.state;
 
@@ -106,7 +148,15 @@ app.post("/square/webhook", (req, res) => {
       return res.status(200).send("ok");
     }
 
-    // ---------- ORDER NUMBER (for bubble label) ----------
+    // If we don't have items yet, try Orders API
+    if (!fullOrder || !Array.isArray(fullOrder.line_items)) {
+      const fetched = await fetchOrderFromSquare(orderId);
+      if (fetched) {
+        fullOrder = fetched;
+      }
+    }
+
+    // ---------- ORDER NUMBER (bubble label) ----------
     let orderNumber = null;
     if (fullOrder) {
       orderNumber =
@@ -114,15 +164,13 @@ app.post("/square/webhook", (req, res) => {
         fullOrder.order_number ||
         fullOrder.display_id ||
         fullOrder.receipt_number ||
-        (fullOrder.id ? fullOrder.id.slice(-6) : null);
+        (fullOrder.id ? fullOrder.id.slice(-6).toUpperCase() : null);
     } else {
-      // Minimal event: we only have order_id and maybe state
-      orderNumber = orderId.slice(-6);
+      orderNumber = orderId.slice(-6).toUpperCase();
     }
 
     // ---------- ITEMS ----------
     let items = [];
-
     if (fullOrder && Array.isArray(fullOrder.line_items)) {
       items = fullOrder.line_items.map((li) => ({
         name: li.name || "Item",
@@ -131,8 +179,8 @@ app.post("/square/webhook", (req, res) => {
           ? li.modifiers.map((m) => m.name).filter(Boolean)
           : [],
       }));
-    } else if (orders[orderId] && Array.isArray(orders[orderId].items)) {
-      // If this is an update event without items, keep what we already know
+    } else if (orders[orderId]?.items) {
+      // reuse items from previous event for same order
       items = orders[orderId].items;
     }
 
@@ -140,29 +188,23 @@ app.post("/square/webhook", (req, res) => {
       (sum, it) => sum + toNumberQuantity(it.quantity),
       0
     );
-
-    // Map Square state into our internal status if you ever want to,
-    // but for now let the kitchen taps control status.
-    const statusFromSquare =
-      typeof state === "string" ? state.toLowerCase() : "new";
+    const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
 
     const existing = orders[orderId] || {};
     const merged = {
       orderId,
       orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
-      status: existing.status || "new", // kitchen drives status
+      status: existing.status || "new", // kitchen taps control this
       createdAt: existing.createdAt || Date.now(),
       itemCount,
       items,
-      stateFromSquare: statusFromSquare,
+      stateFromSquare,
     };
 
-    // Save merged order
     orders[orderId] = merged;
 
-    console.log("✅ Parsed / merged order:", merged);
+    console.log("✅ Final KDS order object:", merged);
 
-    // Notify KDS screens about (new or updated) order
     broadcast({
       type: "NEW_ORDER",
       ...merged,
@@ -171,7 +213,7 @@ app.post("/square/webhook", (req, res) => {
     return res.status(200).send("ok");
   } catch (err) {
     console.error("Webhook Error:", err);
-    // Still acknowledge so Square doesn’t retry spam
+    // 200 so Square doesn’t spam retries while we debug
     return res.status(200).send("error");
   }
 });
@@ -192,7 +234,6 @@ app.get("/test-order", (req, res) => {
     ],
   };
   order.itemCount = order.items.length;
-
   orders[orderId] = order;
 
   broadcast({
@@ -201,12 +242,6 @@ app.get("/test-order", (req, res) => {
   });
 
   res.send(`Test order #${num} sent to KDS`);
-});
-
-// ---------------- Health ----------------
-
-app.get("/healthz", (req, res) => {
-  res.status(200).send("OK");
 });
 
 // ---------------- Start server ----------------
