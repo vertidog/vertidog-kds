@@ -75,9 +75,9 @@
 
     /* Layout: bubbles on left, details on right */
     .layout {
-      flex: 1;
+      flex: 2.2;
       display: flex;
-      min-height: 0;
+      min-width: 0;
     }
     .left-pane {
       flex: 2.2;
@@ -127,14 +127,12 @@
       font-weight: 800;
     }
     
-    /* ADDED TIMER CSS */
     .bubble-timer {
       font-size: 1rem;
       font-weight: 700;
       color: var(--text);
       margin-top: 0.2rem;
-    }
-    /* END ADDED TIMER CSS */
+    } 
 
     .bubble-meta {
       margin-top: 0.2rem;
@@ -166,7 +164,6 @@
       border-color: rgba(34, 197, 94, 0.85);
     }
     
-    /* ADDED CANCELLATION CSS */
     .bubble.cancelled {
       background: #4b5563; /* Gray background */
       border-color: #ef4444; /* Red border to signify cancellation */
@@ -176,7 +173,6 @@
     .bubble.cancelled .bubble-number {
       color: #ef4444; /* Make the order number red */
     }
-    /* END CANCELLATION CSS */
 
     .bubble.done {
       background: #111827;
@@ -340,7 +336,8 @@
     const detailsPanel = document.getElementById("details-panel");
     const doneContainer = document.getElementById("done-container");
 
-    const orders = {};
+    // ORDERS MAP IS NOW KEYED BY orderNumber
+    const orders = {}; 
     let socket;
     let selectedOrderNumber = null;
 
@@ -493,7 +490,7 @@
       switch (msg.type) {
         case "NEW_ORDER":
           addOrUpdate(msg.orderNumber, msg.status || "new", msg);
-          // Auto-select logic removed to prevent jarring pop-ups, especially for cancelled orders.
+          // Auto-select logic removed
           break;
 
         case "SYNC_STATE":
@@ -516,13 +513,16 @@
       ORDER MANAGEMENT
     --------------------------------*/
     function addOrUpdate(orderNumber, status, data = {}) {
-      const existing = orders[orderNumber] || {};
+      // FIX: Use orderNumber as the key for the client-side map
+      const existing = orders[orderNumber] || {}; 
+      
       orders[orderNumber] = {
         orderNumber,
         status,
         createdAt: data.createdAt || existing.createdAt || Date.now(),
         itemCount: data.itemCount ?? existing.itemCount ?? null,
         items: data.items || existing.items || [],
+        orderId: data.orderId || existing.orderId, // Keep orderId for completeness
       };
       
       // LOGIC: If the incoming status is 'cancelled', deselect it immediately
@@ -586,8 +586,8 @@
     function updateTimers() {
       document.querySelectorAll('.bubble').forEach(bubbleEl => {
         const orderNumber = bubbleEl.dataset.order;
-        // Find the order object using orderNumber (since the key is orderId)
-        const order = Object.values(orders).find(o => o.orderNumber === orderNumber);
+        // Since orders is now keyed by orderNumber, finding is easy
+        const order = orders[orderNumber]; 
         
         const timerEl = bubbleEl.querySelector('.bubble-timer');
         
@@ -612,12 +612,15 @@
       RENDERING
     --------------------------------*/
     function render() {
+      // List of all order objects
       const list = Object.values(orders).sort(
         (a, b) => a.createdAt - b.createdAt
       );
 
-      // UPDATED FILTERING to exclude 'done' AND 'cancelled' orders from active view
+      // UPDATED FILTERING: Active orders are NOT 'done' and NOT 'cancelled'
       const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
+      
+      // Completed/Done orders ARE 'done' OR 'cancelled'
       const done = list.filter((o) => o.status === "done" || o.status === "cancelled");
 
       // Active bubbles (top)
@@ -685,7 +688,8 @@
     }
 
     function renderDetails() {
-      const o = selectedOrderNumber ? orders[selectedOrderNumber] : null;
+      // FIX: Lookup order by selectedOrderNumber (which is now the key)
+      const o = selectedOrderNumber ? orders[selectedOrderNumber] : null; 
 
       if (!o) {
         detailsPanel.innerHTML = `
@@ -703,7 +707,7 @@
           ? "IN PROGRESS"
           : o.status === "ready"
           ? "READY"
-          : o.status === "cancelled" // ADDED CANCELLATION CHECK
+          : o.status === "cancelled"
           ? "CANCELLED"
           : "DONE";
 
