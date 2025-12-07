@@ -16,6 +16,7 @@
       --text: #e5e7eb;
       --muted: #6b7280;
       --accent: #a855f7;
+      --drag-hover-color: rgba(168, 85, 247, 0.3); /* Lighter purple for drop targets */
     }
     * {
       box-sizing: border-box;
@@ -90,7 +91,7 @@
       min-width: 0;
     }
 
-    /* MAIN ACTIVE GRID */
+    /* MAIN ACTIVE GRID (Drop Target) */
     main {
       flex: 1;
       padding: 0.75rem;
@@ -98,19 +99,33 @@
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Larger bubbles */
       gap: 0.75rem;
       overflow-y: auto;
+      min-height: 200px; /* Ensure drop target area is visible */
+    }
+
+    /* DRAG STYLES */
+    .drag-over-active {
+        outline: 4px dashed var(--accent);
+        background-color: var(--drag-hover-color);
+    }
+    .drag-over-done {
+        outline: 4px dashed var(--ready);
+        background-color: rgba(34, 197, 94, 0.1);
+    }
+    .dragging {
+        opacity: 0.4;
     }
 
     /* BUBBLE STYLES */
     .bubble {
       position: relative;
       width: 100%;
-      min-height: 140px; /* Use min-height for slightly rectangular cards */
-      border-radius: 12px; /* Square corners */
+      min-height: 140px; 
+      border-radius: 12px; 
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
+      cursor: grab; /* Cursor hint for dragging */
       border: 2px solid transparent;
       box-shadow:
         0 4px 12px rgba(0, 0, 0, 0.4);
@@ -127,6 +142,7 @@
     }
     .bubble:active {
       transform: scale(0.98);
+      cursor: grabbing;
     }
     .bubble-number {
       font-size: 2.5rem;
@@ -193,11 +209,12 @@
       transform: scale(1.02);
     }
 
-    /* COMPLETED SECTION */
+    /* COMPLETED SECTION (Drop Target) */
     #completed-section {
       padding: 0.5rem 0.75rem 0.75rem;
       border-top: 1px solid rgba(15, 23, 42, 0.9);
       background: #020617;
+      min-height: 120px; /* Ensure drop target area is visible */
     }
     .completed-title {
       font-size: 0.8rem;
@@ -345,7 +362,7 @@
   <header>
     <div class="title">
       <h1>VERTIDOG KDS</h1>
-      <span class="subtitle">TAP CARD to advance status: NEW → IN PROGRESS → READY</span>
+      <span class="subtitle">TAP CARD to advance status. DRAG to move between sections.</span>
     </div>
     <div class="status-pill" id="connection-status">
       <span class="dot"></span>
@@ -355,13 +372,19 @@
 
   <div class="layout">
     <div class="left-pane">
-      <main id="bubble-container">
+      <main id="bubble-container" 
+            ondragover="handleDragOver(event, 'active')" 
+            ondragleave="handleDragLeave(event, 'active')" 
+            ondrop="handleDrop(event, 'active')">
         <div class="empty-state" id="empty-state">
           <div>No active orders</div>
         </div>
       </main>
 
-      <section id="completed-section">
+      <section id="completed-section" 
+               ondragover="handleDragOver(event, 'done')" 
+               ondragleave="handleDragLeave(event, 'done')" 
+               ondrop="handleDrop(event, 'done')">
         <div class="completed-title">Recently Completed / Cancelled</div>
         <div id="done-container" class="completed-grid"></div>
       </section>
@@ -564,6 +587,67 @@
     }
 
     /* -----------------------------
+      DRAG & DROP LOGIC
+    --------------------------------*/
+
+    // Set the orderNumber being dragged in the dataTransfer object
+    function handleDragStart(event) {
+        const orderNumber = event.target.dataset.order;
+        event.dataTransfer.setData('text/plain', orderNumber);
+        event.target.classList.add('dragging');
+        // Prevent default click action during drag
+        event.target.onclick = null; 
+    }
+
+    // Clean up after the drag ends
+    function handleDragEnd(event) {
+        event.target.classList.remove('dragging');
+        // Re-enable click action
+        event.target.onclick = () => window.cycleStatus(event.target.dataset.order);
+    }
+
+    // Allow drop operation
+    function handleDragOver(event, targetType) {
+        event.preventDefault(); // Necessary to allow drop
+        const targetElement = (targetType === 'active') ? bubbleContainer : document.getElementById('completed-section');
+        targetElement.classList.add(`drag-over-${targetType}`);
+    }
+
+    // Remove visual cue when drag leaves
+    function handleDragLeave(event, targetType) {
+        const targetElement = (targetType === 'active') ? bubbleContainer : document.getElementById('completed-section');
+        targetElement.classList.remove(`drag-over-${targetType}`);
+    }
+
+    // Handle the actual drop action
+    function handleDrop(event, targetType) {
+        event.preventDefault();
+        const orderNumber = event.dataTransfer.getData('text/plain');
+        
+        // Remove drag-over classes
+        bubbleContainer.classList.remove('drag-over-active');
+        document.getElementById('completed-section').classList.remove('drag-over-done');
+
+        if (!orderNumber || !orders[orderNumber]) return;
+
+        if (targetType === 'active') {
+            // Dragged to main screen -> Must become ACTIVE ('in-progress')
+            orders[orderNumber].status = 'in-progress';
+            // OPTIONAL: Inform server that a 'done'/'cancelled' order is reactivated
+            // sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
+        } else if (targetType === 'done') {
+            // Dragged to completed section -> Must become DONE
+            orders[orderNumber].status = 'done';
+            // OPTIONAL: Inform server that a 'new'/'in-progress' order is skipped to 'done'
+            // sendMessage({ type: "ORDER_SKIPPED_DONE", orderNumber: orderNumber });
+        }
+
+        selectedOrderNumber = orderNumber;
+        render();
+    }
+
+
+    /* -----------------------------
       ORDER MANAGEMENT
     --------------------------------*/
     function addOrUpdate(orderNumber, status, data = {}) {
@@ -607,7 +691,12 @@
 
     window.cycleStatus = function(orderNumber) {
       const o = orders[orderNumber];
-      if (!o || o.status === 'cancelled' || o.status === 'done') return;
+      // Allow cycling only if active status
+      if (!o || o.status === 'cancelled' || o.status === 'done') {
+         selectedOrderNumber = orderNumber;
+         renderDetails();
+         return;
+      }
 
       selectedOrderNumber = orderNumber;
 
@@ -621,6 +710,9 @@
 
         // 2. Client immediately initiates the ready actions (sound/TTS and the move-to-done timeout)
         triggerReadyActions(orderNumber, { playSound: true });
+      } else if (o.status === "ready") {
+         // Tapping ready order immediately marks it done
+         o.status = "done";
       }
 
       render();
@@ -682,7 +774,9 @@
           const b = document.createElement("div");
           b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
-          // Set window.cycleStatus for console testing/direct click
+          b.setAttribute('draggable', true); // Enable dragging
+          b.ondragstart = handleDragStart;
+          b.ondragend = handleDragEnd;
           b.onclick = () => window.cycleStatus(o.orderNumber); 
 
           const statusText = 
@@ -711,6 +805,9 @@
         const b = document.createElement("div");
         b.className = `bubble ${statusClass}${isSelected ? " selected" : ""}`;
         b.dataset.order = o.orderNumber;
+        b.setAttribute('draggable', true); // Enable dragging
+        b.ondragstart = handleDragStart;
+        b.ondragend = handleDragEnd;
 
         // Click: select and show details, no state change
         b.onclick = () => {
