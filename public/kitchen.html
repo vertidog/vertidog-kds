@@ -64,10 +64,43 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
+    /* NEW STYLES FOR HEADER PILLS */
+    header .status-tabs {
+      display: flex;
+      gap: 0.6rem;
+      flex: 1;
+      min-width: 0;
+    }
+    header .tab-pill {
+      padding: 0.3rem 0.8rem;
+      border-radius: 999px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: var(--muted);
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    header .tab-pill:hover {
+      background: rgba(15, 23, 42, 0.9);
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    header .active-tab {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
+    }
+
+    /* Connection Status Pill (moved to the right) */
     header .status-pill {
       padding: 0.35rem 0.8rem;
       border-radius: 999px;
-      font-size: 0.9rem; /* bigger */
+      font-size: 0.9rem;
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -146,18 +179,17 @@
       transform: scale(1.01);
     }
 
+    /* STATUS PILL (moved inside header) */
     .bubble-status {
-      position: absolute;
-      top: 0.75rem;
-      right: 0.75rem;
-      font-size: 0.85rem; /* bigger */
-      padding: 0.25rem 0.6rem;
-      border-radius: 999px;
+      font-size: 0.85rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
       font-weight: 800;
       letter-spacing: 0.03em;
+      margin-top: 0.3rem;
     }
 
-    /* FIX START: Removed excessive padding from bubble-header */
+    /* FIX: Removed excessive padding for overlap fix */
     .bubble-header {
       display: flex;
       align-items: flex-start;
@@ -165,7 +197,6 @@
       gap: 1rem;
       padding-right: 0.5rem; /* Reduced padding */
     }
-    /* FIX END */
 
     .bubble-number {
       font-size: clamp(2.8rem, 4vw, 3.4rem); /* BIG */
@@ -173,7 +204,7 @@
       line-height: 1;
     }
 
-    /* FIX START: Added flex: 0 0 auto to prevent shrinking */
+    /* FIX: Added flex: 0 0 auto to prevent shrinking */
     .bubble-metas {
       display: flex;
       flex-direction: column;
@@ -183,8 +214,6 @@
       min-width: 120px;
       flex: 0 0 auto;
     }
-    /* FIX END */
-
     .bubble-timer {
       font-size: 1.35rem; /* bigger */
       font-weight: 900;
@@ -301,13 +330,13 @@
       border-radius: 12px;
       cursor: grab;
     }
-    /* FIX START: Corrected completed card header padding */
+    /* FIX: Corrected completed card header padding */
     .completed-grid .bubble-header { padding-right: 0.5rem; }
-    /* FIX END */
     .completed-grid .bubble-number { font-size: 1.75rem; }
     .completed-grid .bubble-timer { display: none; }
     .completed-grid .bubble-items { display: none; }
     .completed-grid .bubble-meta { font-size: 0.95rem; }
+    .completed-grid .bubble-status { margin-top: 0.1rem; }
 
     .bubble.done {
       background: #111827;
@@ -340,6 +369,11 @@
     <div class="title">
       <h1>VERTIDOG KDS</h1>
       <span class="subtitle">Tap card to advance status. Drag cards between ACTIVE and COMPLETED.</span>
+    </div>
+    <div id="status-pills" class="status-tabs">
+      <div class="tab-pill active-tab" data-filter="active">ACTIVE (<span id="active-count">0</span>)</div>
+      <div class="tab-pill" data-filter="done">COMPLETED (<span id="done-count">0</span>)</div>
+      <div class="tab-pill" data-filter="cancelled">CANCELLED (<span id="cancelled-count">0</span>)</div>
     </div>
     <div class="status-pill" id="connection-status">
       <span class="dot"></span>
@@ -379,6 +413,11 @@
     const connectionStatus = document.getElementById("connection-status");
     const readySound = document.getElementById("ready-sound");
     const doneContainer = document.getElementById("done-container");
+    
+    // NEW: Elements for the new header pills
+    const activeCountEl = document.getElementById("active-count");
+    const doneCountEl = document.getElementById("done-count");
+    const cancelledCountEl = document.getElementById("cancelled-count");
 
     const orders = {};
     let socket;
@@ -683,11 +722,18 @@
     function render() {
       const list = Object.values(orders).sort((a, b) => a.createdAt - b.createdAt);
 
+      // Group orders for display and counting
       const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
-      const done = list.filter((o) => o.status === "done" || o.status === "cancelled");
+      const done = list.filter((o) => o.status === "done");
+      const cancelled = list.filter((o) => o.status === "cancelled");
+
+      // Update counts in the header pills
+      activeCountEl.textContent = active.length;
+      doneCountEl.textContent = done.length;
+      cancelledCountEl.textContent = cancelled.length;
 
       bubbleContainer.innerHTML = "";
-
+      // --- Render Active Orders ---
       if (active.length === 0) {
         bubbleContainer.appendChild(emptyState);
       } else {
@@ -710,10 +756,11 @@
             o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
 
           b.innerHTML = `
-            <div class="bubble-status">${statusText}</div>
-
             <div class="bubble-header">
-              <div class="bubble-number">#${escapeHtml(o.orderNumber)}</div>
+              <div>
+                <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
+                <div class="bubble-status">${statusText}</div>
+              </div>
               <div class="bubble-metas">
                 <div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div>
                 <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
@@ -729,10 +776,15 @@
         });
       }
 
+      // --- Render Completed/Cancelled Orders ---
       doneContainer.innerHTML = "";
-      done.forEach((o) => {
+      // We combine done and cancelled for the footer bar, but use the counts for the pills
+      const completedList = [...done, ...cancelled].sort((a, b) => b.createdAt - a.createdAt); 
+
+      completedList.forEach((o) => {
         const isSelected = o.orderNumber === selectedOrderNumber;
         const statusClass = o.status === "cancelled" ? "cancelled" : "done";
+        const statusLabel = o.status === "cancelled" ? "CANCELLED" : "DONE";
 
         const b = document.createElement("div");
         b.className = `bubble ${statusClass}${isSelected ? " selected" : ""}`;
@@ -749,10 +801,11 @@
           o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
 
         b.innerHTML = `
-          <div class="bubble-status">${statusClass.toUpperCase()}</div>
-
           <div class="bubble-header">
-            <div class="bubble-number">#${escapeHtml(o.orderNumber)}</div>
+            <div>
+              <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
+              <div class="bubble-status">${statusLabel}</div>
+            </div>
             <div class="bubble-metas">
               <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
             </div>
