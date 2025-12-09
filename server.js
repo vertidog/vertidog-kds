@@ -21,7 +21,7 @@ const SQUARE_BASE_URL =
     : "https://connect.squareup.com";
 
 // In-memory store keyed by orderId
-let orders = {}; // <--- Changed to `let` for re-assignment in loadKDSState
+let orders = {}; // <--- Must be `let` for re-assignment in loadKDSState
 
 // ---------------- Persistence Functions ----------------
 const ORDERS_FILE = path.join(__dirname, "orders.json");
@@ -108,7 +108,6 @@ async function fetchOrderFromSquare(orderId) {
     }
 
     const json = await resp.json();
-    console.log("✅ Orders API fetched order:", JSON.stringify(json));
     return json.order || null;
   } catch (err) {
     console.log("❌ Orders API fetch failed:", err);
@@ -140,7 +139,7 @@ wss.on("connection", (ws) => {
         if (orderToMark) {
           orderToMark.status = "ready";
           orders[orderToMark.orderId] = orderToMark; 
-          saveKDSState(); // <--- 3. SAVING STATE ON STATUS CHANGE
+          saveKDSState(); // <--- SAVING STATE ON STATUS CHANGE
 
           broadcast({
             type: "ORDER_READY_CONFIRM",
@@ -154,7 +153,7 @@ wss.on("connection", (ws) => {
         if (orderToMark) {
           orderToMark.status = "in-progress";
           orders[orderToMark.orderId] = orderToMark;
-          saveKDSState(); // <--- 3. SAVING STATE ON REACTIVATE
+          saveKDSState(); // <--- SAVING STATE ON REACTIVATE
           broadcast({
              type: "NEW_ORDER",
              ...orderToMark,
@@ -167,7 +166,7 @@ wss.on("connection", (ws) => {
         if (orderToMark) {
           orderToMark.status = "done";
           orders[orderToMark.orderId] = orderToMark;
-          saveKDSState(); // <--- 3. SAVING STATE ON SKIPPED DONE
+          saveKDSState(); // <--- SAVING STATE ON SKIPPED DONE
           broadcast({
              type: "NEW_ORDER",
              ...orderToMark,
@@ -177,7 +176,7 @@ wss.on("connection", (ws) => {
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
-            orders: Object.values(orders), // <--- 4. FIXED: SEND ALL ORDERS
+            orders: Object.values(orders), // <--- FIXED: SEND ALL ORDERS
           })
         );
       }
@@ -190,7 +189,7 @@ wss.on("connection", (ws) => {
   ws.send(
     JSON.stringify({
       type: "SYNC_STATE",
-      orders: Object.values(orders), // <--- 4. FIXED: SEND ALL ORDERS
+      orders: Object.values(orders), // <--- FIXED: SEND ALL ORDERS
     })
   );
 
@@ -245,6 +244,7 @@ app.post("/square/webhook", async (req, res) => {
 
     let orderNumber = null;
     if (fullOrder) {
+      // Prioritize Square's display fields (display_id is usually the visible number)
       orderNumber =
         fullOrder.ticket_name ||
         fullOrder.order_number ||
@@ -281,7 +281,7 @@ app.post("/square/webhook", async (req, res) => {
     
     // Rule 1: Cancellation is the only update that can override any KDS status.
     if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
-        kdsStatus = "cancelled"; // <--- This sends the order to Completed/Cancelled
+        kdsStatus = "cancelled"; // <--- FORCES STATUS TO CANCELLED
     }
     
     // Rule 2: Lock the status if the kitchen has already acted (unless cancelled)
@@ -292,7 +292,8 @@ app.post("/square/webhook", async (req, res) => {
 
     const merged = {
       orderId,
-      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
+      // CRITICAL FIX: Prioritize the existing order number if it's already in the system
+      orderNumber: existing.orderNumber || orderNumber || orderId.slice(-6), 
       status: kdsStatus, // Use the determined status
       createdAt: existing.createdAt || Date.now(),
       itemCount,
@@ -302,7 +303,7 @@ app.post("/square/webhook", async (req, res) => {
 
     orders[orderId] = merged;
 
-    saveKDSState(); // <--- 3. SAVING STATE ON WEBHOOK RECEIPT
+    saveKDSState(); // <--- SAVING STATE ON WEBHOOK RECEIPT
 
     broadcast({
       type: "NEW_ORDER",
@@ -334,7 +335,7 @@ app.get("/test-order", (req, res) => {
   };
   order.itemCount = order.items.reduce((sum, it) => sum + it.quantity, 0);
   orders[orderId] = order;
-  saveKDSState(); // <--- 3. SAVING STATE ON TEST ORDER
+  saveKDSState(); // <--- SAVING STATE ON TEST ORDER
 
   broadcast({
     type: "NEW_ORDER",
