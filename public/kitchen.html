@@ -58,7 +58,7 @@
       white-space: nowrap;
     }
     header .subtitle {
-      font-size: 0.95rem; /* bigger for 11" */
+      font-size: 0.95rem; 
       color: var(--muted);
       white-space: nowrap;
       overflow: hidden;
@@ -67,7 +67,7 @@
     header .status-pill {
       padding: 0.35rem 0.8rem;
       border-radius: 999px;
-      font-size: 0.9rem; /* bigger */
+      font-size: 0.9rem; 
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -90,7 +90,7 @@
       flex: 1;
       padding: 0.9rem;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); /* WIDER cards */
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
       gap: 0.9rem;
       overflow-y: auto;
       min-height: 220px;
@@ -125,7 +125,7 @@
     .bubble {
       position: relative;
       width: 100%;
-      min-height: 240px; /* taller for readable items */
+      min-height: 240px; 
       border-radius: var(--radius);
       cursor: grab;
       border: 2px solid transparent;
@@ -150,7 +150,7 @@
       position: absolute;
       top: 0.75rem;
       right: 0.75rem;
-      font-size: 0.85rem; /* bigger */
+      font-size: 0.85rem; 
       padding: 0.25rem 0.6rem;
       border-radius: 999px;
       font-weight: 800;
@@ -162,11 +162,11 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 1rem;
-      padding-right: 6.8rem; /* leaves room for status pill */
+      padding-right: 6.8rem; 
     }
 
     .bubble-number {
-      font-size: clamp(2.8rem, 4vw, 3.4rem); /* BIG */
+      font-size: clamp(2.8rem, 4vw, 3.4rem); 
       font-weight: 900;
       line-height: 1;
     }
@@ -180,13 +180,13 @@
       min-width: 120px;
     }
     .bubble-timer {
-      font-size: 1.35rem; /* bigger */
+      font-size: 1.35rem; 
       font-weight: 900;
       color: var(--text);
       line-height: 1.05;
     }
     .bubble-meta {
-      font-size: 1.0rem; /* bigger */
+      font-size: 1.0rem; 
       color: var(--muted);
       font-weight: 650;
     }
@@ -208,7 +208,7 @@
       gap: 0.75rem;
     }
     .item-name {
-      font-size: 1.15rem; /* bigger */
+      font-size: 1.15rem; 
       font-weight: 800;
       color: var(--text);
       overflow: hidden;
@@ -229,7 +229,7 @@
     }
     .item-mods {
       margin-top: 0.15rem;
-      font-size: 0.98rem; /* readable */
+      font-size: 0.98rem; 
       color: rgba(34, 197, 94, 0.92);
       font-style: italic;
       line-height: 1.2;
@@ -273,7 +273,7 @@
       min-height: 140px;
     }
     .completed-title {
-      font-size: 0.95rem; /* bigger */
+      font-size: 0.95rem; 
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: var(--muted);
@@ -286,7 +286,6 @@
       padding-bottom: 0.35rem;
     }
 
-    /* slightly larger completed cards so they remain readable */
     .completed-grid .bubble {
       width: 220px;
       min-width: 220px;
@@ -320,7 +319,7 @@
     .bubble.cancelled .bubble-status { background: var(--cancel); color: #fff; }
 
     @media (max-width: 860px) {
-      header .subtitle { display: none; } /* keep clean on small widths */
+      header .subtitle { display: none; } 
       main { grid-template-columns: 1fr; }
       .completed-grid .bubble { width: 200px; min-width: 200px; }
     }
@@ -504,14 +503,20 @@
           break;
 
         case "SYNC_STATE":
+          // FIXED: We now receive ALL orders from the server.
+          // Clear and rebuild the state based on the authoritative server sync
+          Object.keys(orders).forEach(key => delete orders[key]);
           (msg.orders || []).forEach((o) => addOrUpdate(o.orderNumber, o.status || "new", o));
+          
+          // Select an order if none is selected
           if (!selectedOrderNumber && (msg.orders || []).length > 0) {
-            selectedOrderNumber = msg.orders[0].orderNumber;
+            selectedOrderNumber = msg.orders.find(o => o.status !== 'done' && o.status !== 'cancelled')?.orderNumber;
           }
           break;
 
         case "ORDER_READY_CONFIRM":
-          markReady(msg.orderNumber, { playSound: true });
+          // Server acknowledges the status change and we trigger local Ready actions
+          markReady(msg.orderNumber, { playSound: true, serverConfirmed: true });
           break;
       }
       render();
@@ -541,7 +546,7 @@
       targetElement.classList.remove(`drag-over-${targetType}`);
     }
 
-    function handleDrop(event, targetType) {
+    window.handleDrop = function(event, targetType) {
       event.preventDefault();
       const orderNumber = event.dataTransfer.getData("text/plain");
 
@@ -549,13 +554,22 @@
       document.getElementById("completed-section").classList.remove("drag-over-done");
 
       if (!orderNumber || !orders[orderNumber]) return;
+      const orderId = orders[orderNumber].orderId;
 
       if (targetType === "active") {
         orders[orderNumber].status = "in-progress";
-        sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
+        sendMessage({ 
+          type: "ORDER_REACTIVATED", 
+          orderNumber: orderNumber,
+          orderId: orderId,
+        }); 
       } else if (targetType === "done") {
         orders[orderNumber].status = "done";
-        sendMessage({ type: "ORDER_SKIPPED_DONE", orderNumber: orderNumber });
+        sendMessage({ 
+          type: "ORDER_SKIPPED_DONE", 
+          orderNumber: orderNumber,
+          orderId: orderId,
+        });
       }
 
       selectedOrderNumber = orderNumber;
@@ -589,8 +603,16 @@
 
       setTimeout(() => {
         const oCheck = orders[orderNumber];
+        // Only trigger 'done' if status is still 'ready' AND the server hasn't already sent a full 'done' update
         if (oCheck && oCheck.status === "ready") {
           oCheck.status = "done";
+          
+          sendMessage({ 
+            type: "ORDER_SKIPPED_DONE", 
+            orderNumber: oCheck.orderNumber,
+            orderId: oCheck.orderId,
+          });
+          
           render();
         }
       }, 5000);
@@ -602,18 +624,26 @@
 
       if (!o) return render();
 
+      // If already completed/cancelled, just select it.
       if (o.status === "cancelled" || o.status === "done") {
         return render();
       }
 
+      // Status cycling
       if (o.status === "new") {
         o.status = "in-progress";
       } else if (o.status === "in-progress") {
         o.status = "ready";
-        sendMessage({ type: "ORDER_READY", orderNumber });
-        triggerReadyActions(orderNumber, { playSound: true });
+        sendMessage({ type: "ORDER_READY", orderNumber, orderId: o.orderId }); 
       } else if (o.status === "ready") {
+        // Tapping ready order immediately marks it done (and persists it)
         o.status = "done";
+        
+        sendMessage({ 
+            type: "ORDER_SKIPPED_DONE", 
+            orderNumber: o.orderNumber,
+            orderId: o.orderId,
+        });
       }
 
       render();
@@ -622,10 +652,16 @@
     function markReady(orderNumber, options = {}) {
       const o = orders[orderNumber];
       if (!o || o.status === "done" || o.status === "cancelled") return;
+      
+      // Ensure local status is "ready" (optional, as server may have sent it already)
       o.status = "ready";
       selectedOrderNumber = orderNumber;
       render();
-      triggerReadyActions(orderNumber, options);
+      
+      // Only trigger sound/timer if this action was confirmed by the server
+      if (options.serverConfirmed) {
+        triggerReadyActions(orderNumber, options);
+      }
     }
 
     function updateTimers() {
@@ -676,13 +712,16 @@
       const list = Object.values(orders).sort((a, b) => a.createdAt - b.createdAt);
 
       const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
-      const done = list.filter((o) => o.status === "done" || o.status === "cancelled");
+      const done = list.filter((o) => o.status === "done" || o.status === "cancelled"); // Client filters here
 
       bubbleContainer.innerHTML = "";
-
+      emptyState.style.display = 'flex'; 
+      
       if (active.length === 0) {
         bubbleContainer.appendChild(emptyState);
       } else {
+        emptyState.style.display = 'none'; 
+        
         active.forEach((o) => {
           const isSelected = o.orderNumber === selectedOrderNumber;
           const b = document.createElement("div");
@@ -734,7 +773,6 @@
         b.ondragstart = handleDragStart;
         b.ondragend = handleDragEnd;
 
-        // Click: just highlight (no cycling)
         b.onclick = () => { selectedOrderNumber = o.orderNumber; render(); };
 
         const itemCountText =
