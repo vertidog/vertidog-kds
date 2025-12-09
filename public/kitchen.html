@@ -65,7 +65,7 @@
       text-overflow: ellipsis;
     }
 
-    /* NEW STYLES FOR HEADER PILLS */
+    /* STYLES FOR HEADER PILLS (Tabs) */
     header .status-tabs {
       display: flex;
       gap: 0.6rem;
@@ -96,7 +96,7 @@
       box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
     }
 
-    /* Connection Status Pill (moved to the right) */
+    /* Connection Status Pill */
     header .status-pill {
       padding: 0.35rem 0.8rem;
       border-radius: 999px;
@@ -118,7 +118,7 @@
       box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
     }
 
-    /* MAIN GRID (Drop Target) */
+    /* MAIN GRID (Now holds all views) */
     main {
       flex: 1;
       padding: 0.9rem;
@@ -141,24 +141,19 @@
       justify-content: center;
     }
 
-    /* DRAG STYLES */
+    /* DRAG STYLES (Only active when filter is 'active') */
     .drag-over-active {
       outline: 4px dashed var(--accent);
       background-color: var(--drag-hover-color);
       border-radius: var(--radius);
     }
-    .drag-over-done {
-      outline: 4px dashed var(--ready);
-      background-color: rgba(34, 197, 94, 0.10);
-      border-radius: var(--radius);
-    }
     .dragging { opacity: 0.4; }
 
-    /* CARD */
+    /* CARD (Uniform layout for all statuses) */
     .bubble {
       position: relative;
       width: 100%;
-      min-height: 240px; /* taller for readable items */
+      min-height: 240px; 
       border-radius: var(--radius);
       cursor: grab;
       border: 2px solid transparent;
@@ -300,44 +295,7 @@
     }
     .bubble.ready .bubble-status { background: var(--ready); color: var(--card-bg); }
 
-    /* COMPLETED SECTION (Drop Target) */
-    #completed-section {
-      padding: 0.75rem 0.9rem 0.95rem;
-      border-top: 1px solid rgba(15, 23, 42, 0.9);
-      background: #020617;
-      min-height: 140px;
-    }
-    .completed-title {
-      font-size: 0.95rem; /* bigger */
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin: 0 0 0.6rem;
-    }
-    .completed-grid {
-      display: flex;
-      gap: 0.6rem;
-      overflow-x: auto;
-      padding-bottom: 0.35rem;
-    }
-
-    /* slightly larger completed cards so they remain readable */
-    .completed-grid .bubble {
-      width: 220px;
-      min-width: 220px;
-      min-height: 110px;
-      padding: 0.8rem 0.85rem;
-      border-radius: 12px;
-      cursor: grab;
-    }
-    /* FIX: Corrected completed card header padding */
-    .completed-grid .bubble-header { padding-right: 0.5rem; }
-    .completed-grid .bubble-number { font-size: 1.75rem; }
-    .completed-grid .bubble-timer { display: none; }
-    .completed-grid .bubble-items { display: none; }
-    .completed-grid .bubble-meta { font-size: 0.95rem; }
-    .completed-grid .bubble-status { margin-top: 0.1rem; }
-
+    /* DONE Status (Uniformed to large card layout) */
     .bubble.done {
       background: #111827;
       border-color: #334155;
@@ -349,6 +307,7 @@
       color: #e5e7eb;
     }
 
+    /* CANCELLED Status (Uniformed to large card layout) */
     .bubble.cancelled {
       background: #111827;
       border-color: var(--cancel);
@@ -356,10 +315,12 @@
     }
     .bubble.cancelled .bubble-status { background: var(--cancel); color: #fff; }
 
+
+    /* Removed all .completed-grid and related styles as they are no longer needed */
+
     @media (max-width: 860px) {
       header .subtitle { display: none; } /* keep clean on small widths */
       main { grid-template-columns: 1fr; }
-      .completed-grid .bubble { width: 200px; min-width: 200px; }
     }
   </style>
 </head>
@@ -368,12 +329,12 @@
   <header>
     <div class="title">
       <h1>VERTIDOG KDS</h1>
-      <span class="subtitle">Tap card to advance status. Drag cards between ACTIVE and COMPLETED.</span>
+      <span class="subtitle">Tap card to advance status. Drag orders to the main grid to change status.</span>
     </div>
     <div id="status-pills" class="status-tabs">
-      <div class="tab-pill active-tab" data-filter="active">ACTIVE (<span id="active-count">0</span>)</div>
-      <div class="tab-pill" data-filter="done">COMPLETED (<span id="done-count">0</span>)</div>
-      <div class="tab-pill" data-filter="cancelled">CANCELLED (<span id="cancelled-count">0</span>)</div>
+      <div class="tab-pill active-tab" data-filter="active" onclick="setFilter('active')">ACTIVE (<span id="active-count">0</span>)</div>
+      <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
+      <div class="tab-pill" data-filter="cancelled" onclick="setFilter('cancelled')">CANCELLED (<span id="cancelled-count">0</span>)</div>
     </div>
     <div class="status-pill" id="connection-status">
       <span class="dot"></span>
@@ -390,14 +351,6 @@
     </div>
   </main>
 
-  <section id="completed-section"
-           ondragover="handleDragOver(event, 'done')"
-           ondragleave="handleDragLeave(event, 'done')"
-           ondrop="handleDrop(event, 'done')">
-    <div class="completed-title">Recently Completed / Cancelled</div>
-    <div id="done-container" class="completed-grid"></div>
-  </section>
-
   <audio id="ready-sound" preload="auto">
     <source src="/sounds/order-ready.mp3" type="audio/mpeg" />
   </audio>
@@ -412,9 +365,8 @@
     const emptyState = document.getElementById("empty-state");
     const connectionStatus = document.getElementById("connection-status");
     const readySound = document.getElementById("ready-sound");
-    const doneContainer = document.getElementById("done-container");
     
-    // NEW: Elements for the new header pills
+    // Elements for the new header pills
     const activeCountEl = document.getElementById("active-count");
     const doneCountEl = document.getElementById("done-count");
     const cancelledCountEl = document.getElementById("cancelled-count");
@@ -422,6 +374,7 @@
     const orders = {};
     let socket;
     let selectedOrderNumber = null;
+    let currentFilter = 'active'; // NEW: Default filter state
 
     // TTS + announcement queue
     let preferredVoice = null;
@@ -563,6 +516,27 @@
       }
       render();
     }
+    
+    /* -----------------------------
+      FILTERING LOGIC (New)
+    --------------------------------*/
+    window.setFilter = function(newFilter) {
+      if (currentFilter === newFilter) return;
+
+      currentFilter = newFilter;
+      
+      // Highlight pill
+      document.querySelectorAll('.tab-pill').forEach(pill => {
+        pill.classList.remove('active-tab');
+        if (pill.dataset.filter === newFilter) {
+          pill.classList.add('active-tab');
+        }
+      });
+
+      // Re-render the view
+      render();
+    }
+
 
     /* -----------------------------
       DRAG & DROP LOGIC
@@ -579,30 +553,37 @@
 
     function handleDragOver(event, targetType) {
       event.preventDefault();
-      const targetElement = (targetType === "active") ? bubbleContainer : document.getElementById("completed-section");
-      targetElement.classList.add(`drag-over-${targetType}`);
+      // Only show drag-over effect if we are in the 'active' view
+      if (currentFilter === 'active') {
+          bubbleContainer.classList.add(`drag-over-${targetType}`);
+      }
     }
 
     function handleDragLeave(event, targetType) {
-      const targetElement = (targetType === "active") ? bubbleContainer : document.getElementById("completed-section");
-      targetElement.classList.remove(`drag-over-${targetType}`);
+      // Only remove drag-over effect if we are in the 'active' view
+      if (currentFilter === 'active') {
+          bubbleContainer.classList.remove(`drag-over-${targetType}`);
+      }
     }
 
     function handleDrop(event, targetType) {
       event.preventDefault();
       const orderNumber = event.dataTransfer.getData("text/plain");
 
+      // Remove drag-over highlights regardless of view
       bubbleContainer.classList.remove("drag-over-active");
-      document.getElementById("completed-section").classList.remove("drag-over-done");
 
       if (!orderNumber || !orders[orderNumber]) return;
-
-      if (targetType === "active") {
-        orders[orderNumber].status = "in-progress";
+      
+      const o = orders[orderNumber];
+      
+      // Dropping onto the main grid only causes status change if dropped order is Done/Cancelled
+      if (o.status === "done" || o.status === "cancelled") {
+        o.status = "in-progress";
         sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
-      } else if (targetType === "done") {
-        orders[orderNumber].status = "done";
-        sendMessage({ type: "ORDER_SKIPPED_DONE", orderNumber: orderNumber });
+      } else {
+         // No status change for active orders dropped onto the active grid
+         return; 
       }
 
       selectedOrderNumber = orderNumber;
@@ -649,6 +630,7 @@
 
       if (!o) return render();
 
+      // Only allow status cycling for active orders
       if (o.status === "cancelled" || o.status === "done") {
         return render();
       }
@@ -676,12 +658,15 @@
     }
 
     function updateTimers() {
-      document.querySelectorAll(".bubble").forEach((bubbleEl) => {
-        const orderNumber = bubbleEl.dataset.order;
-        const order = orders[orderNumber];
-        const timerEl = bubbleEl.querySelector(".bubble-timer");
-        if (order && timerEl) timerEl.textContent = formatTimeElapsed(order.createdAt);
-      });
+      // Only update timers if we are viewing the 'active' list
+      if (currentFilter === 'active') {
+        document.querySelectorAll(".bubble").forEach((bubbleEl) => {
+          const orderNumber = bubbleEl.dataset.order;
+          const order = orders[orderNumber];
+          const timerEl = bubbleEl.querySelector(".bubble-timer");
+          if (order && timerEl) timerEl.textContent = formatTimeElapsed(order.createdAt);
+        });
+      }
     }
     setInterval(updateTimers, 1000);
 
@@ -726,6 +711,26 @@
       const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
       const done = list.filter((o) => o.status === "done");
       const cancelled = list.filter((o) => o.status === "cancelled");
+      
+      // Determine which list to display based on the current filter
+      let filteredList = [];
+      let emptyMessage = "No active orders.";
+      
+      if (currentFilter === 'done') {
+          filteredList = done.sort((a, b) => b.createdAt - a.createdAt); // Newest first
+          emptyMessage = "No completed orders.";
+          bubbleContainer.ondragover = null; // Disable drag highlights
+      } else if (currentFilter === 'cancelled') {
+          filteredList = cancelled.sort((a, b) => b.createdAt - a.createdAt); // Newest first
+          emptyMessage = "No cancelled orders.";
+          bubbleContainer.ondragover = null; // Disable drag highlights
+      } else { // 'active'
+          filteredList = active;
+          emptyMessage = "No active orders.";
+          // Re-enable dragover handler to show highlight when filter is 'active'
+          bubbleContainer.ondragover = (e) => handleDragOver(e, 'active');
+      }
+
 
       // Update counts in the header pills
       activeCountEl.textContent = active.length;
@@ -733,28 +738,38 @@
       cancelledCountEl.textContent = cancelled.length;
 
       bubbleContainer.innerHTML = "";
-      // --- Render Active Orders ---
-      if (active.length === 0) {
+      
+      if (filteredList.length === 0) {
+        emptyState.querySelector('div').textContent = emptyMessage;
         bubbleContainer.appendChild(emptyState);
       } else {
-        active.forEach((o) => {
+        filteredList.forEach((o) => {
           const isSelected = o.orderNumber === selectedOrderNumber;
           const b = document.createElement("div");
           b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
-
+          
           b.setAttribute("draggable", true);
           b.ondragstart = handleDragStart;
           b.ondragend = handleDragEnd;
-          b.onclick = () => window.cycleStatus(o.orderNumber);
+          
+          // Click handler depends on status: cycle for active, highlight for passive
+          const isActiveStatus = (o.status === "new" || o.status === "in-progress" || o.status === "ready");
+          b.onclick = isActiveStatus 
+            ? () => window.cycleStatus(o.orderNumber)
+            : () => { selectedOrderNumber = o.orderNumber; render(); };
 
           const statusText =
             o.status === "new" ? "NEW" :
-            o.status === "in-progress" ? "IN PROGRESS" : "READY";
+            o.status === "in-progress" ? "IN PROGRESS" : 
+            o.status === "ready" ? "READY" :
+            o.status === "done" ? "COMPLETED" : "CANCELLED"; // Added COMPLETED/CANCELLED labels
 
           const itemCountText =
             o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
 
+          // The timer now always renders but only updates when the filter is 'active'
+          // For COMPLETED/CANCELLED views, the time will show a static value (time since creation)
           b.innerHTML = `
             <div class="bubble-header">
               <div>
@@ -775,45 +790,8 @@
           bubbleContainer.appendChild(b);
         });
       }
-
-      // --- Render Completed/Cancelled Orders ---
-      doneContainer.innerHTML = "";
-      // We combine done and cancelled for the footer bar, but use the counts for the pills
-      const completedList = [...done, ...cancelled].sort((a, b) => b.createdAt - a.createdAt); 
-
-      completedList.forEach((o) => {
-        const isSelected = o.orderNumber === selectedOrderNumber;
-        const statusClass = o.status === "cancelled" ? "cancelled" : "done";
-        const statusLabel = o.status === "cancelled" ? "CANCELLED" : "DONE";
-
-        const b = document.createElement("div");
-        b.className = `bubble ${statusClass}${isSelected ? " selected" : ""}`;
-        b.dataset.order = o.orderNumber;
-
-        b.setAttribute("draggable", true);
-        b.ondragstart = handleDragStart;
-        b.ondragend = handleDragEnd;
-
-        // Click: just highlight (no cycling)
-        b.onclick = () => { selectedOrderNumber = o.orderNumber; render(); };
-
-        const itemCountText =
-          o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
-
-        b.innerHTML = `
-          <div class="bubble-header">
-            <div>
-              <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
-              <div class="bubble-status">${statusLabel}</div>
-            </div>
-            <div class="bubble-metas">
-              <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
-            </div>
-          </div>
-        `;
-
-        doneContainer.appendChild(b);
-      });
+      
+      // Removed all old completed section rendering logic
     }
 
     connect();
