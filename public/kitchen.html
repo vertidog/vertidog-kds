@@ -118,12 +118,12 @@
       box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
     }
 
-    /* MAIN GRID (Now holds all views) */
+    /* MAIN GRID */
     main {
       flex: 1;
       padding: 0.9rem;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); /* WIDER cards */
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 0.9rem;
       overflow-y: auto;
       min-height: 220px;
@@ -141,7 +141,7 @@
       justify-content: center;
     }
 
-    /* DRAG STYLES (Only active when filter is 'active') */
+    /* DRAG STYLES */
     .drag-over-active {
       outline: 4px dashed var(--accent);
       background-color: var(--drag-hover-color);
@@ -149,11 +149,11 @@
     }
     .dragging { opacity: 0.4; }
 
-    /* CARD (Uniform layout for all statuses) */
+    /* CARD */
     .bubble {
       position: relative;
       width: 100%;
-      min-height: 240px; 
+      min-height: 240px;
       border-radius: var(--radius);
       cursor: grab;
       border: 2px solid transparent;
@@ -174,7 +174,6 @@
       transform: scale(1.01);
     }
 
-    /* STATUS PILL (moved inside header) */
     .bubble-status {
       font-size: 0.85rem;
       padding: 0.15rem 0.5rem;
@@ -184,22 +183,20 @@
       margin-top: 0.3rem;
     }
 
-    /* FIX: Removed excessive padding for overlap fix */
     .bubble-header {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 1rem;
-      padding-right: 0.5rem; /* Reduced padding */
+      padding-right: 0.5rem;
     }
 
     .bubble-number {
-      font-size: clamp(2.8rem, 4vw, 3.4rem); /* BIG */
+      font-size: clamp(2.8rem, 4vw, 3.4rem);
       font-weight: 900;
       line-height: 1;
     }
 
-    /* FIX: Added flex: 0 0 auto to prevent shrinking */
     .bubble-metas {
       display: flex;
       flex-direction: column;
@@ -210,16 +207,35 @@
       flex: 0 0 auto;
     }
     .bubble-timer {
-      font-size: 1.35rem; /* bigger */
+      font-size: 1.35rem;
       font-weight: 900;
       color: var(--text);
       line-height: 1.05;
     }
     .bubble-meta {
-      font-size: 1.0rem; /* bigger */
+      font-size: 1.0rem;
       color: var(--muted);
       font-weight: 650;
     }
+
+    /* NEW: RECALL button style */
+    .recall-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: background 0.2s;
+      flex: 0 0 auto;
+      text-transform: uppercase;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    .recall-btn:hover { background: #8e44ad; }
+
 
     .bubble-items {
       flex: 1;
@@ -295,7 +311,7 @@
     }
     .bubble.ready .bubble-status { background: var(--ready); color: var(--card-bg); }
 
-    /* DONE Status (Uniformed to large card layout) */
+    /* DONE Status */
     .bubble.done {
       background: #111827;
       border-color: #334155;
@@ -307,7 +323,7 @@
       color: #e5e7eb;
     }
 
-    /* CANCELLED Status (Uniformed to large card layout) */
+    /* CANCELLED Status */
     .bubble.cancelled {
       background: #111827;
       border-color: var(--cancel);
@@ -316,10 +332,8 @@
     .bubble.cancelled .bubble-status { background: var(--cancel); color: #fff; }
 
 
-    /* Removed all .completed-grid and related styles as they are no longer needed */
-
     @media (max-width: 860px) {
-      header .subtitle { display: none; } /* keep clean on small widths */
+      header .subtitle { display: none; }
       main { grid-template-columns: 1fr; }
     }
   </style>
@@ -329,7 +343,7 @@
   <header>
     <div class="title">
       <h1>VERTIDOG KDS</h1>
-      <span class="subtitle">Tap card to advance status. Drag orders to the main grid to change status.</span>
+      <span class="subtitle">Tap to cycle status. Long press to cancel. Drag cancelled/done cards to recall.</span>
     </div>
     <div id="status-pills" class="status-tabs">
       <div class="tab-pill active-tab" data-filter="active" onclick="setFilter('active')">ACTIVE (<span id="active-count">0</span>)</div>
@@ -374,7 +388,12 @@
     const orders = {};
     let socket;
     let selectedOrderNumber = null;
-    let currentFilter = 'active'; // NEW: Default filter state
+    let currentFilter = 'active';
+
+    // NEW: Long Press and Interaction state
+    let pressTimer = null;
+    let isLongPress = false;
+    const LONG_PRESS_THRESHOLD = 700; // ms
 
     // TTS + announcement queue
     let preferredVoice = null;
@@ -518,7 +537,7 @@
     }
     
     /* -----------------------------
-      FILTERING LOGIC (New)
+      FILTERING LOGIC
     --------------------------------*/
     window.setFilter = function(newFilter) {
       if (currentFilter === newFilter) return;
@@ -533,7 +552,8 @@
         }
       });
 
-      // Re-render the view
+      // Clear selection when switching views
+      selectedOrderNumber = null;
       render();
     }
 
@@ -570,7 +590,6 @@
       event.preventDefault();
       const orderNumber = event.dataTransfer.getData("text/plain");
 
-      // Remove drag-over highlights regardless of view
       bubbleContainer.classList.remove("drag-over-active");
 
       if (!orderNumber || !orders[orderNumber]) return;
@@ -579,15 +598,81 @@
       
       // Dropping onto the main grid only causes status change if dropped order is Done/Cancelled
       if (o.status === "done" || o.status === "cancelled") {
-        o.status = "in-progress";
-        sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
+        window.recallOrder(orderNumber, event); 
       } else {
-         // No status change for active orders dropped onto the active grid
          return; 
       }
 
       selectedOrderNumber = orderNumber;
       render();
+    }
+
+    /* -----------------------------
+      LONG PRESS / CANCEL LOGIC
+    --------------------------------*/
+    function handleLongPressStart(event) {
+      // Prevent long press if drag is detected early
+      if (event.dataTransfer) return; 
+
+      // Only allow long press on active orders
+      const orderNumber = event.currentTarget.dataset.order;
+      const o = orders[orderNumber];
+      if (!o || (o.status === "done" || o.status === "cancelled")) return;
+
+      // Clear any existing timer
+      isLongPress = false;
+      clearTimeout(pressTimer);
+      
+      // Prevent text selection during long press attempt
+      event.currentTarget.style.userSelect = 'none';
+
+      pressTimer = setTimeout(() => {
+          // Long press detected
+          isLongPress = true;
+          pressTimer = null; 
+          event.currentTarget.style.userSelect = 'auto';
+          confirmCancel(orderNumber);
+      }, LONG_PRESS_THRESHOLD);
+    }
+
+    function handlePressEnd(event) {
+      clearTimeout(pressTimer);
+      pressTimer = null;
+      
+      // Reset user-select style
+      if (event.currentTarget) {
+          event.currentTarget.style.userSelect = 'auto';
+      }
+      
+      // If a long press was triggered, prevent the subsequent 'click' event from firing cycleStatus.
+      if (isLongPress) {
+          event.preventDefault(); 
+          event.stopPropagation();
+          // Don't reset isLongPress here; let cycleStatus handle it on click prevention
+      }
+    }
+
+    function confirmCancel(orderNumber) {
+      const confirmed = window.confirm(`Are you sure you want to CANCEL order ${orderNumber}? \n\nThis will remove it from the active list.`);
+
+      if (confirmed) {
+          cancelOrder(orderNumber);
+      } else {
+          isLongPress = false; // Reset flag if cancellation is aborted
+      }
+    }
+
+    window.cancelOrder = function(orderNumber) {
+      const o = orders[orderNumber];
+      if (!o) return;
+      
+      o.status = "cancelled";
+      // Send message to server to persist the change
+      sendMessage({ type: "ORDER_CANCELLED", orderNumber: orderNumber });
+      
+      selectedOrderNumber = null;
+      // Switch to cancelled filter after successful cancellation
+      setFilter('cancelled');
     }
 
     /* -----------------------------
@@ -625,6 +710,12 @@
     }
 
     window.cycleStatus = function(orderNumber) {
+      // If long press was detected, prevent tap-to-cycle
+      if (isLongPress) {
+          isLongPress = false; // Consume the flag
+          return;
+      }
+      
       const o = orders[orderNumber];
       selectedOrderNumber = orderNumber;
 
@@ -647,6 +738,24 @@
 
       render();
     }
+    
+    // NEW: Recall function to bring completed/cancelled orders back to active
+    window.recallOrder = function(orderNumber, event) {
+      // Prevent card click highlight/select action when button is pressed
+      if (event) event.stopPropagation(); 
+      
+      const o = orders[orderNumber];
+      if (!o || (o.status !== "done" && o.status !== "cancelled")) return;
+      
+      o.status = "in-progress";
+      sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
+      
+      selectedOrderNumber = orderNumber;
+      // Switch to active filter after recall
+      setFilter('active'); 
+      render();
+    }
+
 
     function markReady(orderNumber, options = {}) {
       const o = orders[orderNumber];
@@ -745,6 +854,8 @@
       } else {
         filteredList.forEach((o) => {
           const isSelected = o.orderNumber === selectedOrderNumber;
+          const isActiveStatus = (o.status === "new" || o.status === "in-progress" || o.status === "ready");
+
           const b = document.createElement("div");
           b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
@@ -753,23 +864,42 @@
           b.ondragstart = handleDragStart;
           b.ondragend = handleDragEnd;
           
-          // Click handler depends on status: cycle for active, highlight for passive
-          const isActiveStatus = (o.status === "new" || o.status === "in-progress" || o.status === "ready");
-          b.onclick = isActiveStatus 
-            ? () => window.cycleStatus(o.orderNumber)
-            : () => { selectedOrderNumber = o.orderNumber; render(); };
+          // NEW: Long Press Handlers for active cards
+          if (isActiveStatus) {
+              b.onmousedown = handleLongPressStart;
+              b.onmouseup = handlePressEnd;
+              b.onmouseleave = handlePressEnd;
+              b.ontouchstart = handleLongPressStart;
+              b.ontouchend = handlePressEnd;
+              b.ontouchcancel = handlePressEnd;
+          }
+          
+          // Click handler
+          b.onclick = (e) => {
+              if (isActiveStatus) {
+                  window.cycleStatus(o.orderNumber); 
+              } else {
+                 // Click on passive card is just for highlighting/selecting
+                 selectedOrderNumber = o.orderNumber; 
+                 render(); 
+              }
+          };
 
           const statusText =
             o.status === "new" ? "NEW" :
             o.status === "in-progress" ? "IN PROGRESS" : 
             o.status === "ready" ? "READY" :
-            o.status === "done" ? "COMPLETED" : "CANCELLED"; // Added COMPLETED/CANCELLED labels
+            o.status === "done" ? "COMPLETED" : "CANCELLED";
 
           const itemCountText =
             o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
 
-          // The timer now always renders but only updates when the filter is 'active'
-          // For COMPLETED/CANCELLED views, the time will show a static value (time since creation)
+          // Decide whether to show the recall button
+          const recallButtonHtml = isActiveStatus 
+             ? '' 
+             : `<button class="recall-btn" onclick="window.recallOrder('${o.orderNumber}', event)">RECALL</button>`;
+          
+          // The timer is shown for all but updates only for active
           b.innerHTML = `
             <div class="bubble-header">
               <div>
@@ -779,6 +909,7 @@
               <div class="bubble-metas">
                 <div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div>
                 <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
+                ${recallButtonHtml}
               </div>
             </div>
 
@@ -790,8 +921,6 @@
           bubbleContainer.appendChild(b);
         });
       }
-      
-      // Removed all old completed section rendering logic
     }
 
     connect();
