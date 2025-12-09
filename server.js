@@ -1,72 +1,56 @@
 // ===============================
 // VertiDog KDS Backend – with Square Orders API
-// ===========================================
+// ===============================
 
 const express = require("express");
 const http = require("http");
 const { WebSocketServer } = require("ws");
 const bodyParser = require("body-parser");
 const path = require("path");
-const fs = require('fs'); // <--- ADDED: File System module for persistence
+const fs = require('fs'); // <--- 1. ADDED: File system module for persistence
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const DATA_FILE = path.join(__dirname, 'orders.json'); // <--- ADDED: Persistence file path
 
 // For Square Orders API
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN;
-const SQUARE_ENV = process.env.SQUARE_ENV || "production"; 
+const SQUARE_ENV = process.env.SQUARE_ENV || "production"; // or "sandbox"
 const SQUARE_BASE_URL =
   SQUARE_ENV === "sandbox"
     ? "https://connect.squareupsandbox.com"
     : "https://connect.squareup.com";
 
 // In-memory store keyed by orderId
-const orders = {};
+let orders = {}; // <--- Changed to `let` for re-assignment in loadKDSState
 
-// ---------------- Persistence Helpers ----------------
+// ---------------- Persistence Functions ----------------
+const ORDERS_FILE = path.join(__dirname, "orders.json");
 
 function saveKDSState() {
-    try {
-        const simplifiedOrders = Object.values(orders).map(o => ({
-            orderId: o.orderId,
-            orderNumber: o.orderNumber,
-            status: o.status,
-            createdAt: o.createdAt
-        }));
-        fs.writeFileSync(DATA_FILE, JSON.stringify(simplifiedOrders, null, 4), 'utf8');
-        console.log('💾 KDS state saved.');
-    } catch (e) {
-        console.error("❌ Error saving KDS state:", e);
-    }
+  try {
+    const data = JSON.stringify(orders, null, 2);
+    fs.writeFileSync(ORDERS_FILE, data);
+    console.log("📝 KDS state saved.");
+  } catch (err) {
+    console.error("❌ Error saving KDS state:", err);
+  }
 }
 
 function loadKDSState() {
-    try {
-        if (fs.existsSync(DATA_FILE)) {
-            const data = fs.readFileSync(DATA_FILE, 'utf8');
-            const simplifiedOrders = JSON.parse(data);
-            
-            simplifiedOrders.forEach(o => {
-                const existingOrder = orders[o.orderId] || {};
-                
-                // CRITICAL MERGE: Prioritize the persistent status from the file
-                orders[o.orderId] = {
-                    ...existingOrder,       
-                    orderId: o.orderId,
-                    orderNumber: o.orderNumber,
-                    status: o.status,       // <--- PERSISTENT STATUS WINS
-                    createdAt: o.createdAt  
-                };
-            });
-            console.log(`✅ Loaded ${simplifiedOrders.length} orders from disk. Persistent status applied.`);
-        }
-    } catch (e) {
-        console.error("❌ Error loading KDS state:", e);
+  try {
+    if (fs.existsSync(ORDERS_FILE)) {
+      const data = fs.readFileSync(ORDERS_FILE, "utf8");
+      orders = JSON.parse(data);
+      console.log(`✅ KDS state loaded: ${Object.keys(orders).length} orders.`);
+    } else {
+      fs.writeFileSync(ORDERS_FILE, JSON.stringify({}));
+      console.log("ℹ️ orders.json not found, created empty file and starting with empty state.");
     }
+  } catch (err) {
+    console.error("❌ Error loading KDS state:", err);
+  }
 }
-
-loadKDSState(); // Load state on server startup
+// ---------------- End Persistence ----------------
 
 // ---------------- KDS SEQUENTIAL COUNTER (FOR TEST ENDPOINT ONLY) ----------------
 let testOrderCounter = 0; 
@@ -74,7 +58,7 @@ let testOrderCounter = 0;
 function getNextTestTicketNumber() {
     testOrderCounter++;
     if (testOrderCounter > 999) {
-        testOrderCounter = 1; 
+        testOrderCounter = 1; // Reset to 001 after 999
     }
     return String(testOrderCounter).padStart(3, '0'); 
 }
@@ -95,6 +79,7 @@ function broadcast(msgObj) {
   });
 }
 
+// Fetch full order from Square if webhook was minimal
 async function fetchOrderFromSquare(orderId) {
   if (!SQUARE_ACCESS_TOKEN) {
     console.log("⚠️ No SQUARE_ACCESS_TOKEN set, skipping Orders API fetch.");
@@ -107,7 +92,7 @@ async function fetchOrderFromSquare(orderId) {
       headers: {
         Authorization: `Bearer ${SQUARE_ACCESS_TOKEN}`,
         "Content-Type": "application/json",
-        "Square-Version": "2024-03-20", 
+        "Square-Version": "2024-03-20",
       },
     });
 
@@ -136,6 +121,8 @@ async function fetchOrderFromSquare(orderId) {
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
+loadKDSState(); // <--- 2. CALLED AT STARTUP
+
 wss.on("connection", (ws) => {
   console.log("KDS connected");
 
@@ -144,55 +131,53 @@ wss.on("connection", (ws) => {
     try {
       const data = JSON.parse(message.toString());
       console.log("Client message received:", data.type);
-      
-      let orderToUpdate;
-      
-      const orderKey = data.orderId || (data.orderNumber && Object.values(orders).find(o => o.orderNumber === data.orderNumber)?.orderId);
-      if (!orderKey) {
-        if (data.type !== "SYNC_REQUEST") console.log(`⚠️ Cannot process message ${data.type}: orderKey missing.`);
-      } else {
-        orderToUpdate = orders[orderKey];
-      }
-      
-      if (data.type === "ORDER_READY" && orderToUpdate) {
-        
-          orderToUpdate.status = "ready";
-          orders[orderKey] = orderToUpdate; 
-          saveKDSState();
-          
+
+      if (data.type === "ORDER_READY" && data.orderNumber) {
+        const orderToMark = Object.values(orders).find(
+          (o) => o.orderNumber === data.orderNumber
+        );
+
+        if (orderToMark) {
+          orderToMark.status = "ready";
+          orders[orderToMark.orderId] = orderToMark; 
+          saveKDSState(); // <--- 3. SAVING STATE ON STATUS CHANGE
+
           broadcast({
             type: "ORDER_READY_CONFIRM",
-            orderNumber: orderToUpdate.orderNumber,
+            orderNumber: orderToMark.orderNumber,
           });
-
-      } else if (data.type === "ORDER_REACTIVATED" && orderToUpdate) { 
-          
-          orderToUpdate.status = 'in-progress'; 
-          orders[orderKey] = orderToUpdate; 
-          saveKDSState(); 
-
+        }
+      } else if (data.type === "ORDER_REACTIVATED" && data.orderNumber) {
+        const orderToMark = Object.values(orders).find(
+          (o) => o.orderNumber === data.orderNumber
+        );
+        if (orderToMark) {
+          orderToMark.status = "in-progress";
+          orders[orderToMark.orderId] = orderToMark;
+          saveKDSState(); // <--- 3. SAVING STATE ON REACTIVATE
           broadcast({
-            type: "NEW_ORDER", 
-            ...orderToUpdate,
+             type: "NEW_ORDER",
+             ...orderToMark,
           });
-
-      } else if (data.type === "ORDER_SKIPPED_DONE" && orderToUpdate) { 
-          
-          orderToUpdate.status = 'done'; 
-          orders[orderKey] = orderToUpdate; 
-          saveKDSState(); 
-
+        }
+      } else if (data.type === "ORDER_SKIPPED_DONE" && data.orderNumber) {
+        const orderToMark = Object.values(orders).find(
+          (o) => o.orderNumber === data.orderNumber
+        );
+        if (orderToMark) {
+          orderToMark.status = "done";
+          orders[orderToMark.orderId] = orderToMark;
+          saveKDSState(); // <--- 3. SAVING STATE ON SKIPPED DONE
           broadcast({
-            type: "NEW_ORDER",
-            ...orderToUpdate,
+             type: "NEW_ORDER",
+             ...orderToMark,
           });
-
+        }
       } else if (data.type === "SYNC_REQUEST") {
-        // FIXED: Send *all* orders so client can handle the done/active split
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
-            orders: Object.values(orders), // <--- NOW SENDING ALL ORDERS
+            orders: Object.values(orders), // <--- 4. FIXED: SEND ALL ORDERS
           })
         );
       }
@@ -201,11 +186,11 @@ wss.on("connection", (ws) => {
     }
   });
 
-  // FIXED: Initial sync should also send *all* orders
+  // Initial sync request (send ALL orders)
   ws.send(
     JSON.stringify({
       type: "SYNC_STATE",
-      orders: Object.values(orders), // <--- NOW SENDING ALL ORDERS
+      orders: Object.values(orders), // <--- 4. FIXED: SEND ALL ORDERS
     })
   );
 
@@ -230,11 +215,6 @@ app.get("/healthz", (req, res) => res.status(200).send("OK"));
 app.post("/square/webhook", async (req, res) => {
   try {
     const body = req.body || {};
-    console.log("🔔 Square Webhook Received:", JSON.stringify(body));
-
-    const eventType = body.type;
-    console.log("Square Event:", eventType);
-
     const dataObj = body.data || {};
     const objectWrapper = dataObj.object || {};
 
@@ -245,19 +225,14 @@ app.post("/square/webhook", async (req, res) => {
       null;
 
     if (!eventWrapper) {
-      console.log(
-        "❌ No order wrapper (order / order_created / order_updated)."
-      );
       return res.status(200).send("ok");
     }
 
     let fullOrder = eventWrapper.order || null;
-
     const orderId = (fullOrder && fullOrder.id) || eventWrapper.order_id;
     const state = (fullOrder && fullOrder.state) || eventWrapper.state;
 
     if (!orderId) {
-      console.log("❌ No order_id present in event.");
       return res.status(200).send("ok");
     }
 
@@ -268,21 +243,18 @@ app.post("/square/webhook", async (req, res) => {
       }
     }
 
-    // ---------- ORDER NUMBER ----------
     let orderNumber = null;
     if (fullOrder) {
       orderNumber =
         fullOrder.ticket_name ||
         fullOrder.order_number ||
-        fullOrder.display_id || 
+        fullOrder.display_id ||
         fullOrder.receipt_number ||
         (fullOrder.id ? fullOrder.id.slice(-6).toUpperCase() : null);
     } else {
       orderNumber = orderId.slice(-6).toUpperCase();
     }
-    // ---------- END ORDER NUMBER ASSIGNMENT ----------
 
-    // ---------- ITEMS ----------
     let items = [];
     if (fullOrder && Array.isArray(fullOrder.line_items)) {
       items = fullOrder.line_items.map((li) => ({
@@ -304,27 +276,23 @@ app.post("/square/webhook", async (req, res) => {
 
     const existing = orders[orderId] || {};
     
-    // --- ULTIMATE KDS STATUS LOCK FIX ---
-    
+    // --- KDS STATUS LOGIC ---
     let kdsStatus = existing.status || "new";
     
     // Rule 1: Cancellation is the only update that can override any KDS status.
     if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
-        kdsStatus = "cancelled";
+        kdsStatus = "cancelled"; // <--- This sends the order to Completed/Cancelled
     }
     
-    // Rule 2 (THE CRITICAL PART): If the order already exists in our KDS memory 
-    // AND it has been touched (i.e., status is NOT 'new'), we NEVER override 
-    // the existing KDS status with a general Square update (like 'OPEN').
+    // Rule 2: Lock the status if the kitchen has already acted (unless cancelled)
     if (existing.status && existing.status !== 'new' && kdsStatus !== 'cancelled') {
         kdsStatus = existing.status;
     }
-    
-    // --- END ULTIMATE KDS STATUS LOCK FIX ---
+    // --- END KDS STATUS LOGIC ---
 
     const merged = {
       orderId,
-      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6), 
+      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
       status: kdsStatus, // Use the determined status
       createdAt: existing.createdAt || Date.now(),
       itemCount,
@@ -334,16 +302,12 @@ app.post("/square/webhook", async (req, res) => {
 
     orders[orderId] = merged;
 
-    saveKDSState(); 
-
-    console.log("✅ Final KDS order object:", merged);
+    saveKDSState(); // <--- 3. SAVING STATE ON WEBHOOK RECEIPT
 
     broadcast({
       type: "NEW_ORDER",
       ...merged,
     });
-    
-    console.log(`📊 Total orders in memory: ${Object.keys(orders).length}`); 
 
     return res.status(200).send("ok");
   } catch (err) {
@@ -355,11 +319,11 @@ app.post("/square/webhook", async (req, res) => {
 // ---------------- Test endpoint ----------------
 
 app.get("/test-order", (req, res) => {
-  const ticketNum = getNextTestTicketNumber(); 
+  const ticketNum = getNextTestTicketNumber();
   const orderId = `TEST-${ticketNum}-${Date.now()}`;
   const order = {
     orderId,
-    orderNumber: ticketNum, 
+    orderNumber: ticketNum,
     status: "new",
     createdAt: Date.now(),
     items: [
@@ -370,8 +334,7 @@ app.get("/test-order", (req, res) => {
   };
   order.itemCount = order.items.reduce((sum, it) => sum + it.quantity, 0);
   orders[orderId] = order;
-
-  saveKDSState(); 
+  saveKDSState(); // <--- 3. SAVING STATE ON TEST ORDER
 
   broadcast({
     type: "NEW_ORDER",
@@ -379,7 +342,6 @@ app.get("/test-order", (req, res) => {
   });
 
   res.send(`Test order #${ticketNum} sent to KDS`);
-  console.log(`📊 Total orders in memory: ${Object.keys(orders).length}`);
 });
 
 // ---------------- Start server ----------------
