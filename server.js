@@ -24,6 +24,20 @@ const SQUARE_BASE_URL =
 // In-memory store keyed by orderId
 const orders = {};
 
+// ---------------- KDS SEQUENTIAL COUNTER (FOR TEST ENDPOINT ONLY) ----------------
+// This counter is only used by the /test-order endpoint to simulate clean Square numbers
+let testOrderCounter = 0; 
+
+function getNextTestTicketNumber() {
+    testOrderCounter++;
+    if (testOrderCounter > 999) {
+        testOrderCounter = 1; // Reset to 001 after 999
+    }
+    // Format to 3 digits (e.g., 1 -> "001")
+    return String(testOrderCounter).padStart(3, '0'); 
+}
+// ---------------- End Test Counter ----------------
+
 // ---------------- Helpers ----------------
 
 function toNumberQuantity(q) {
@@ -190,18 +204,20 @@ app.post("/square/webhook", async (req, res) => {
       }
     }
 
-    // ---------- ORDER NUMBER (bubble label) ----------
+    // ---------- ORDER NUMBER (Pulls Square's Display ID) ----------
     let orderNumber = null;
     if (fullOrder) {
+      // Prioritize Square's display fields (ticket_name, display_id, etc.)
       orderNumber =
         fullOrder.ticket_name ||
         fullOrder.order_number ||
-        fullOrder.display_id ||
+        fullOrder.display_id || // <--- This is the key display number
         fullOrder.receipt_number ||
         (fullOrder.id ? fullOrder.id.slice(-6).toUpperCase() : null);
     } else {
       orderNumber = orderId.slice(-6).toUpperCase();
     }
+    // ---------- END ORDER NUMBER ASSIGNMENT ----------
 
     // ---------- ITEMS ----------
     let items = [];
@@ -247,7 +263,7 @@ app.post("/square/webhook", async (req, res) => {
 
     const merged = {
       orderId,
-      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
+      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6), // Final selection, preferring Square's
       status: kdsStatus, // Use the determined status
       createdAt: existing.createdAt || Date.now(),
       itemCount,
@@ -275,11 +291,11 @@ app.post("/square/webhook", async (req, res) => {
 // ---------------- Test endpoint ----------------
 
 app.get("/test-order", (req, res) => {
-  const num = Math.floor(Math.random() * 900 + 100);
-  const orderId = `TEST-${num}`;
+  const ticketNum = getNextTestTicketNumber(); // <--- Sequential 001, 002... for testing
+  const orderId = `TEST-${ticketNum}-${Date.now()}`;
   const order = {
     orderId,
-    orderNumber: String(num),
+    orderNumber: ticketNum, // <--- Clean 3-digit number
     status: "new",
     createdAt: Date.now(),
     items: [
@@ -296,7 +312,7 @@ app.get("/test-order", (req, res) => {
     ...order,
   });
 
-  res.send(`Test order #${num} sent to KDS`);
+  res.send(`Test order #${ticketNum} sent to KDS`);
 });
 
 // ---------------- Start server ----------------
