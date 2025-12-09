@@ -5,21 +5,23 @@
   <title>VertiDog KDS: Kitchen Display System</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
+    /* VARIABLES */
     :root {
       --bg: #050816;
       --card-bg: #0b1020;
-      --new: #3b82f6;
-      --progress: #f97316;
-      --ready: #22c55e;
-      --cancel: #ef4444;
+      --new: #3b82f6;      /* Blue */
+      --progress: #f97316; /* Orange */
+      --ready: #22c55e;    /* Green */
+      --cancel: #ef4444;   /* Red */
       --text: #e5e7eb;
-      --muted: #94a3b8;
+      --muted: #6b7280;
       --accent: #a855f7;
-      --drag-hover-color: rgba(168, 85, 247, 0.22);
-      --radius: 16px;
+      --drag-hover-color: rgba(168, 85, 247, 0.3); /* Lighter purple for drop targets */
     }
-
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
     body {
       margin: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -29,10 +31,10 @@
       display: flex;
       flex-direction: column;
     }
-
+    
     /* HEADER */
     header {
-      padding: 0.9rem 1.15rem;
+      padding: 0.75rem 1.25rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -40,298 +42,327 @@
       border-bottom: 1px solid rgba(148, 163, 184, 0.25);
       backdrop-filter: blur(10px);
       z-index: 10;
-      gap: 1rem;
     }
     header .title {
       display: flex;
-      flex-direction: column;
-      gap: 0.15rem;
-      min-width: 0;
+      align-items: baseline;
+      gap: 0.5rem;
     }
     header h1 {
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       margin: 0;
       color: var(--accent);
-      line-height: 1.1;
-      white-space: nowrap;
     }
     header .subtitle {
-      font-size: 0.95rem; /* bigger for 11" */
+      font-size: 0.8rem;
       color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
     header .status-pill {
-      padding: 0.35rem 0.8rem;
+      padding: 0.25rem 0.75rem;
       border-radius: 999px;
-      font-size: 0.9rem; /* bigger */
+      font-size: 0.75rem;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.4rem;
       background: rgba(34, 197, 94, 0.12);
       border: 1px solid rgba(34, 197, 94, 0.3);
       color: #bbf7d0;
-      flex: 0 0 auto;
-      white-space: nowrap;
     }
     header .dot {
-      width: 0.55rem;
-      height: 0.55rem;
+      width: 0.4rem;
+      height: 0.4rem;
       border-radius: 999px;
       background: #22c55e;
-      box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
     }
 
-    /* MAIN GRID (Drop Target) */
+    /* LAYOUT: Main Content */
+    .layout {
+      flex: 2.2;
+      display: flex;
+      min-width: 0;
+    }
+    .left-pane {
+      flex: 2.2;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    /* MAIN ACTIVE GRID (Drop Target) */
     main {
       flex: 1;
-      padding: 0.9rem;
+      padding: 0.75rem;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); /* WIDER cards */
-      gap: 0.9rem;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Larger bubbles */
+      gap: 0.75rem;
       overflow-y: auto;
-      min-height: 220px;
-    }
-
-    .empty-state {
-      width: 100%;
-      border: 1px dashed rgba(148, 163, 184, 0.35);
-      border-radius: var(--radius);
-      padding: 1.25rem;
-      color: var(--muted);
-      font-size: 1.15rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      min-height: 200px; /* Ensure drop target area is visible */
     }
 
     /* DRAG STYLES */
     .drag-over-active {
-      outline: 4px dashed var(--accent);
-      background-color: var(--drag-hover-color);
-      border-radius: var(--radius);
+        outline: 4px dashed var(--accent);
+        background-color: var(--drag-hover-color);
     }
     .drag-over-done {
-      outline: 4px dashed var(--ready);
-      background-color: rgba(34, 197, 94, 0.10);
-      border-radius: var(--radius);
+        outline: 4px dashed var(--ready);
+        background-color: rgba(34, 197, 94, 0.1);
     }
-    .dragging { opacity: 0.4; }
+    .dragging {
+        opacity: 0.4;
+    }
 
-    /* CARD */
+    /* BUBBLE STYLES */
     .bubble {
       position: relative;
       width: 100%;
-      min-height: 240px; /* taller for readable items */
-      border-radius: var(--radius);
-      cursor: grab;
+      min-height: 140px; 
+      border-radius: 12px; 
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: grab; /* Cursor hint for dragging */
       border: 2px solid transparent;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
-      transition: transform 0.1s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out, opacity 0.3s ease-out;
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.4);
+      transition:
+        transform 0.1s ease-out,
+        box-shadow 0.2s ease-out,
+        background 0.2s ease-out,
+        border-color 0.2s ease-out,
+        opacity 0.3s ease-out;
       user-select: none;
       touch-action: manipulation;
-      padding: 1rem 1rem 0.95rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
+      padding: 1rem 0.5rem;
+      text-align: center;
     }
-    .bubble:active { transform: scale(0.99); cursor: grabbing; }
-
-    .bubble.selected {
-      box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.75), 0 12px 26px rgba(0, 0, 0, 0.65);
-      border-color: var(--accent);
-      transform: scale(1.01);
+    .bubble:active {
+      transform: scale(0.98);
+      cursor: grabbing;
     }
-
-    .bubble-status {
-      position: absolute;
-      top: 0.75rem;
-      right: 0.75rem;
-      font-size: 0.85rem; /* bigger */
-      padding: 0.25rem 0.6rem;
-      border-radius: 999px;
-      font-weight: 800;
-      letter-spacing: 0.03em;
-    }
-
-    .bubble-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 1rem;
-      padding-right: 6.8rem; /* leaves room for status pill */
-    }
-
     .bubble-number {
-      font-size: clamp(2.8rem, 4vw, 3.4rem); /* BIG */
-      font-weight: 900;
+      font-size: 2.5rem;
+      font-weight: 800;
       line-height: 1;
     }
-
-    .bubble-metas {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 0.2rem;
-      text-align: right;
-      min-width: 120px;
-    }
     .bubble-timer {
-      font-size: 1.35rem; /* bigger */
-      font-weight: 900;
+      font-size: 1rem;
+      font-weight: 700;
       color: var(--text);
-      line-height: 1.05;
-    }
+      margin-top: 0.2rem;
+    } 
     .bubble-meta {
-      font-size: 1.0rem; /* bigger */
+      margin-top: 0.4rem;
+      font-size: 0.85rem;
       color: var(--muted);
-      font-weight: 650;
     }
-
-    .bubble-items {
-      flex: 1;
-      border-top: 1px solid rgba(148, 163, 184, 0.18);
-      padding-top: 0.75rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.55rem;
-      overflow: hidden;
-    }
-
-    .item-row {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 0.75rem;
-    }
-    .item-name {
-      font-size: 1.15rem; /* bigger */
-      font-weight: 800;
-      color: var(--text);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
-      min-width: 0;
-    }
-    .item-qty {
-      font-size: 1.05rem;
-      font-weight: 900;
-      padding: 0.12rem 0.5rem;
-      border-radius: 999px;
-      border: 1px solid rgba(168, 85, 247, 0.35);
-      background: rgba(168, 85, 247, 0.12);
-      color: #f5f3ff;
-      flex: 0 0 auto;
-    }
-    .item-mods {
-      margin-top: 0.15rem;
-      font-size: 0.98rem; /* readable */
-      color: rgba(34, 197, 94, 0.92);
-      font-style: italic;
-      line-height: 1.2;
-      padding-left: 0.85rem;
-      border-left: 3px solid rgba(34, 197, 94, 0.45);
-    }
-    .items-more {
-      margin-top: 0.35rem;
-      font-size: 1.0rem;
-      color: var(--muted);
-      font-weight: 650;
+    .bubble-status {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      font-size: 0.65rem;
+      padding: 0.1rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 600;
     }
 
     /* Status Specific Styles */
     .bubble.new {
       background: var(--card-bg);
       border-color: var(--new);
-      box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0,0,0,0.45);
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
     }
-    .bubble.new .bubble-status { background: var(--new); color: #fff; }
+    .bubble.new .bubble-status {
+      background: var(--new);
+      color: #fff;
+    }
 
     .bubble.in-progress {
       background: var(--card-bg);
       border-color: var(--progress);
-      box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0,0,0,0.45);
+      box-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
     }
-    .bubble.in-progress .bubble-status { background: var(--progress); color: #fff; }
-
+    .bubble.in-progress .bubble-status {
+      background: var(--progress);
+      color: #fff;
+    }
+    
     .bubble.ready {
-      background: radial-gradient(circle at center, rgba(34, 197, 94, 0.22), var(--card-bg) 70%);
+      background: radial-gradient(circle at center, rgba(34, 197, 94, 0.2), var(--card-bg) 70%);
       border-color: var(--ready);
-      box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0,0,0,0.45);
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.7);
     }
-    .bubble.ready .bubble-status { background: var(--ready); color: var(--card-bg); }
+    .bubble.ready .bubble-status {
+      background: var(--ready);
+      color: var(--card-bg);
+    }
+
+    .bubble.selected {
+      box-shadow:
+        0 0 0 4px var(--accent),
+        0 10px 25px rgba(0, 0, 0, 0.6);
+      border-color: var(--accent);
+      transform: scale(1.02);
+    }
 
     /* COMPLETED SECTION (Drop Target) */
     #completed-section {
-      padding: 0.75rem 0.9rem 0.95rem;
+      padding: 0.5rem 0.75rem 0.75rem;
       border-top: 1px solid rgba(15, 23, 42, 0.9);
       background: #020617;
-      min-height: 140px;
+      min-height: 120px; /* Ensure drop target area is visible */
     }
     .completed-title {
-      font-size: 0.95rem; /* bigger */
+      font-size: 0.8rem;
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: var(--muted);
-      margin: 0 0 0.6rem;
+      margin-bottom: 0.3rem;
     }
     .completed-grid {
       display: flex;
-      gap: 0.6rem;
+      gap: 0.4rem;
       overflow-x: auto;
-      padding-bottom: 0.35rem;
+      padding-bottom: 0.3rem;
     }
-
-    /* slightly larger completed cards so they remain readable */
     .completed-grid .bubble {
-      width: 220px;
-      min-width: 220px;
-      min-height: 110px;
-      padding: 0.8rem 0.85rem;
-      border-radius: 12px;
-      cursor: grab;
+      width: 80px;
+      min-width: 80px;
+      height: 80px;
+      min-height: 80px;
+      border-radius: 6px;
+      padding: 0;
+      opacity: 0.8;
+      box-shadow: none;
+      transition: opacity 0.2s;
     }
-    .completed-grid .bubble-header { padding-right: 6.4rem; }
-    .completed-grid .bubble-number { font-size: 1.75rem; }
-    .completed-grid .bubble-timer { display: none; }
-    .completed-grid .bubble-items { display: none; }
-    .completed-grid .bubble-meta { font-size: 0.95rem; }
+    .completed-grid .bubble-number {
+      font-size: 1.2rem;
+    }
+    .completed-grid .bubble-meta {
+      display: none;
+    }
+    .completed-grid .bubble-status {
+      position: static;
+      transform: none;
+      margin-top: 0.2rem;
+      padding: 0;
+      background: transparent;
+      font-size: 0.6rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
 
     .bubble.done {
-      background: #111827;
-      border-color: #334155;
-      opacity: 0.9;
+      background: #1f2937; /* Darker gray for completed */
+      border-color: #374151;
+      opacity: 0.7;
     }
-    .bubble.done .bubble-status {
-      background: rgba(148, 163, 184, 0.22);
-      border: 1px solid rgba(148, 163, 184, 0.30);
-      color: #e5e7eb;
+    .bubble.done .bubble-number {
+      color: var(--text);
     }
-
+    
     .bubble.cancelled {
       background: #111827;
       border-color: var(--cancel);
-      opacity: 0.95;
+      opacity: 0.9;
     }
-    .bubble.cancelled .bubble-status { background: var(--cancel); color: #fff; }
+    .bubble.cancelled .bubble-number {
+      color: var(--cancel);
+    }
 
-    @media (max-width: 860px) {
-      header .subtitle { display: none; } /* keep clean on small widths */
-      main { grid-template-columns: 1fr; }
-      .completed-grid .bubble { width: 200px; min-width: 200px; }
+    /* DETAILS PANEL */
+    .details-panel {
+      flex: 1;
+      border-left: 1px solid rgba(148, 163, 184, 0.25);
+      padding: 1rem;
+      background: radial-gradient(circle at top, #020617, #020617 60%, #000 100%);
+      font-size: 0.9rem;
+      min-width: 250px;
+      max-width: 350px;
+      display: flex;
+      flex-direction: column;
+    }
+    .details-panel-empty {
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+    .details-order-title {
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+      font-size: 1.2rem;
+      color: var(--accent);
+    }
+    .details-meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+    .details-items-title {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      padding-bottom: 0.3rem;
+    }
+    .details-items {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .details-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    .details-item-name {
+      font-weight: 600;
+    }
+    .details-item-qty {
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .details-modifiers {
+        font-size: 0.8rem;
+        color: var(--ready); 
+        padding-left: 1rem;
+        border-left: 2px solid var(--ready);
+        margin: 0.2rem 0 0.6rem;
+        line-height: 1.3;
+        font-style: italic;
+        opacity: 0.9;
+    }
+
+
+    @media (max-width: 900px) {
+      .layout {
+        flex-direction: column;
+      }
+      .details-panel {
+        max-width: none;
+        border-left: none;
+        border-top: 1px solid rgba(148, 163, 184, 0.25);
+        min-height: 200px;
+      }
+      main {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      }
     }
   </style>
 </head>
-
 <body>
   <header>
     <div class="title">
       <h1>VERTIDOG KDS</h1>
-      <span class="subtitle">Tap card to advance status. Drag cards between ACTIVE and COMPLETED.</span>
+      <span class="subtitle">TAP CARD to advance status. DRAG to move between sections.</span>
     </div>
     <div class="status-pill" id="connection-status">
       <span class="dot"></span>
@@ -339,22 +370,32 @@
     </div>
   </header>
 
-  <main id="bubble-container"
-        ondragover="handleDragOver(event, 'active')"
-        ondragleave="handleDragLeave(event, 'active')"
-        ondrop="handleDrop(event, 'active')">
-    <div class="empty-state" id="empty-state">
-      <div>No active orders</div>
-    </div>
-  </main>
+  <div class="layout">
+    <div class="left-pane">
+      <main id="bubble-container" 
+            ondragover="handleDragOver(event, 'active')" 
+            ondragleave="handleDragLeave(event, 'active')" 
+            ondrop="handleDrop(event, 'active')">
+        <div class="empty-state" id="empty-state">
+          <div>No active orders</div>
+        </div>
+      </main>
 
-  <section id="completed-section"
-           ondragover="handleDragOver(event, 'done')"
-           ondragleave="handleDragLeave(event, 'done')"
-           ondrop="handleDrop(event, 'done')">
-    <div class="completed-title">Recently Completed / Cancelled</div>
-    <div id="done-container" class="completed-grid"></div>
-  </section>
+      <section id="completed-section" 
+               ondragover="handleDragOver(event, 'done')" 
+               ondragleave="handleDragLeave(event, 'done')" 
+               ondrop="handleDrop(event, 'done')">
+        <div class="completed-title">Recently Completed / Cancelled</div>
+        <div id="done-container" class="completed-grid"></div>
+      </section>
+    </div>
+
+    <aside id="details-panel" class="details-panel">
+      <div class="details-panel-empty">
+        Select an order card to see itemized details and prep notes.
+      </div>
+    </aside>
+  </div>
 
   <audio id="ready-sound" preload="auto">
     <source src="/sounds/order-ready.mp3" type="audio/mpeg" />
@@ -370,9 +411,10 @@
     const emptyState = document.getElementById("empty-state");
     const connectionStatus = document.getElementById("connection-status");
     const readySound = document.getElementById("ready-sound");
+    const detailsPanel = document.getElementById("details-panel");
     const doneContainer = document.getElementById("done-container");
 
-    const orders = {};
+    const orders = {}; 
     let socket;
     let selectedOrderNumber = null;
 
@@ -380,27 +422,22 @@
     let preferredVoice = null;
     let announcementQueue = [];
     let isAnnouncing = false;
-
-    function escapeHtml(str) {
-      return String(str ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }
-
+    
+    // --- TIMER HELPER FUNCTION ---
     function formatTimeElapsed(createdAt) {
-      if (!createdAt) return "0s";
+      if (!createdAt) return '0s';
       const secondsElapsed = Math.floor(Math.max(0, Date.now() - createdAt) / 1000);
       const minutes = Math.floor(secondsElapsed / 60);
       const seconds = secondsElapsed % 60;
-      if (minutes > 0) return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
+      
+      if (minutes > 0) {
+        return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+      }
       return `${seconds}s`;
     }
 
     /* -----------------------------
-      TTS SETUP
+      TTS SETUP (pick nicer voice)
     --------------------------------*/
     function loadVoices() {
       if (!("speechSynthesis" in window)) return;
@@ -410,6 +447,7 @@
         voices.find((v) => v.lang && v.lang.startsWith("en")) ||
         null;
     }
+
     if ("speechSynthesis" in window) {
       window.speechSynthesis.onvoiceschanged = loadVoices;
       loadVoices();
@@ -417,18 +455,27 @@
 
     function announceOrder(orderNumber) {
       if (!("speechSynthesis" in window)) return null;
-      const msg = new SpeechSynthesisUtterance(`Order ${orderNumber} is ready for pick up`);
+
+      const msg = new SpeechSynthesisUtterance(
+        `Order ${orderNumber} is ready for pick up`
+      );
       msg.volume = 1.0;
       msg.rate = 0.98;
       msg.pitch = 1.02;
-      if (preferredVoice) msg.voice = preferredVoice;
+
+      if (preferredVoice) {
+        msg.voice = preferredVoice;
+      }
+
       window.speechSynthesis.speak(msg);
       return msg;
     }
 
     function queueAnnouncement(orderNumber) {
       announcementQueue.push(orderNumber);
-      if (!isAnnouncing) playNextAnnouncement();
+      if (!isAnnouncing) {
+        playNextAnnouncement();
+      }
     }
 
     function playNextAnnouncement() {
@@ -436,19 +483,33 @@
         isAnnouncing = false;
         return;
       }
+
       isAnnouncing = true;
       const orderNumber = announcementQueue.shift();
 
       const doTTS = () => {
         const utterance = announceOrder(orderNumber);
-        if (utterance) utterance.onend = () => playNextAnnouncement();
-        else playNextAnnouncement();
+        if (utterance) {
+          utterance.onend = () => {
+            playNextAnnouncement();
+          };
+        } else {
+          // No TTS available, move to next
+          playNextAnnouncement();
+        }
       };
 
       try {
         readySound.currentTime = 0;
-        readySound.onended = () => { readySound.onended = null; doTTS(); };
-        readySound.play().catch(() => { readySound.onended = null; doTTS(); });
+        readySound.onended = () => {
+          readySound.onended = null;
+          doTTS();
+        };
+        readySound.play().catch(() => {
+          // If audio fails, skip straight to TTS
+          readySound.onended = null;
+          doTTS();
+        });
       } catch (e) {
         doTTS();
       }
@@ -460,6 +521,7 @@
     function setConnectionState(connected) {
       const dot = connectionStatus.querySelector(".dot");
       const label = connectionStatus.querySelector("span:last-child");
+
       if (connected) {
         dot.style.background = "#22c55e";
         label.textContent = "Connected";
@@ -478,14 +540,18 @@
         sendMessage({ type: "SYNC_REQUEST" });
       };
 
-      socket.onmessage = (event) => handleMessage(JSON.parse(event.data));
+      socket.onmessage = (event) => {
+        handleMessage(JSON.parse(event.data));
+      };
 
       socket.onclose = () => {
         setConnectionState(false);
         setTimeout(connect, 2000);
       };
 
-      socket.onerror = () => {};
+      socket.onerror = () => {
+        // let onclose handle reconnect
+      };
     }
 
     function sendMessage(msg) {
@@ -504,14 +570,17 @@
           break;
 
         case "SYNC_STATE":
-          (msg.orders || []).forEach((o) => addOrUpdate(o.orderNumber, o.status || "new", o));
+          (msg.orders || []).forEach((o) =>
+            addOrUpdate(o.orderNumber, o.status || "new", o)
+          );
           if (!selectedOrderNumber && (msg.orders || []).length > 0) {
             selectedOrderNumber = msg.orders[0].orderNumber;
           }
           break;
 
         case "ORDER_READY_CONFIRM":
-          markReady(msg.orderNumber, { playSound: true });
+          // When the server confirms, we mark it ready and trigger the completion timeout.
+          markReady(msg.orderNumber, { playSound: true }); 
           break;
       }
       render();
@@ -520,53 +589,67 @@
     /* -----------------------------
       DRAG & DROP LOGIC
     --------------------------------*/
+
+    // Set the orderNumber being dragged in the dataTransfer object
     function handleDragStart(event) {
-      const orderNumber = event.currentTarget?.dataset?.order;
-      event.dataTransfer.setData("text/plain", orderNumber);
-      event.currentTarget.classList.add("dragging");
+        const orderNumber = event.target.dataset.order;
+        event.dataTransfer.setData('text/plain', orderNumber);
+        event.target.classList.add('dragging');
+        // We no longer need to disable/re-enable the click handler here.
     }
 
+    // Clean up after the drag ends
     function handleDragEnd(event) {
-      event.currentTarget.classList.remove("dragging");
+        event.target.classList.remove('dragging');
     }
 
+    // Allow drop operation
     function handleDragOver(event, targetType) {
-      event.preventDefault();
-      const targetElement = (targetType === "active") ? bubbleContainer : document.getElementById("completed-section");
-      targetElement.classList.add(`drag-over-${targetType}`);
+        event.preventDefault(); // Necessary to allow drop
+        const targetElement = (targetType === 'active') ? bubbleContainer : document.getElementById('completed-section');
+        targetElement.classList.add(`drag-over-${targetType}`);
     }
 
+    // Remove visual cue when drag leaves
     function handleDragLeave(event, targetType) {
-      const targetElement = (targetType === "active") ? bubbleContainer : document.getElementById("completed-section");
-      targetElement.classList.remove(`drag-over-${targetType}`);
+        const targetElement = (targetType === 'active') ? bubbleContainer : document.getElementById('completed-section');
+        targetElement.classList.remove(`drag-over-${targetType}`);
     }
 
+    // Handle the actual drop action
     function handleDrop(event, targetType) {
-      event.preventDefault();
-      const orderNumber = event.dataTransfer.getData("text/plain");
+        event.preventDefault();
+        const orderNumber = event.dataTransfer.getData('text/plain');
+        
+        // Remove drag-over classes
+        bubbleContainer.classList.remove('drag-over-active');
+        document.getElementById('completed-section').classList.remove('drag-over-done');
 
-      bubbleContainer.classList.remove("drag-over-active");
-      document.getElementById("completed-section").classList.remove("drag-over-done");
+        if (!orderNumber || !orders[orderNumber]) return;
 
-      if (!orderNumber || !orders[orderNumber]) return;
+        if (targetType === 'active') {
+            // Dragged to main screen -> Must become ACTIVE ('in-progress')
+            orders[orderNumber].status = 'in-progress';
+            // We should also inform the server to unlock the status if it was locked as 'done' or 'cancelled'
+            sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
+        } else if (targetType === 'done') {
+            // Dragged to completed section -> Must become DONE
+            orders[orderNumber].status = 'done';
+            // Inform server to mark it done
+            sendMessage({ type: "ORDER_SKIPPED_DONE", orderNumber: orderNumber });
+        }
 
-      if (targetType === "active") {
-        orders[orderNumber].status = "in-progress";
-        sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
-      } else if (targetType === "done") {
-        orders[orderNumber].status = "done";
-        sendMessage({ type: "ORDER_SKIPPED_DONE", orderNumber: orderNumber });
-      }
-
-      selectedOrderNumber = orderNumber;
-      render();
+        selectedOrderNumber = orderNumber;
+        render();
     }
+
 
     /* -----------------------------
       ORDER MANAGEMENT
     --------------------------------*/
     function addOrUpdate(orderNumber, status, data = {}) {
-      const existing = orders[orderNumber] || {};
+      const existing = orders[orderNumber] || {}; 
+      
       orders[orderNumber] = {
         orderNumber,
         status,
@@ -575,45 +658,64 @@
         items: data.items || existing.items || [],
         orderId: data.orderId || existing.orderId,
       };
-
-      if (status === "cancelled" && selectedOrderNumber === orderNumber) {
-        selectedOrderNumber = null;
+      
+      // If order is cancelled, ensure it's unselected
+      if (status === 'cancelled') {
+        if (selectedOrderNumber === orderNumber) {
+          selectedOrderNumber = null;
+        }
       }
     }
 
     function triggerReadyActions(orderNumber, options = {}) {
       const o = orders[orderNumber];
       if (!o) return;
-
-      if (options.playSound) queueAnnouncement(orderNumber);
-
+    
+      if (options.playSound) {
+        queueAnnouncement(orderNumber);
+      }
+    
+      // Set timer to move to 'done' after 5 seconds
       setTimeout(() => {
         const oCheck = orders[orderNumber];
         if (oCheck && oCheck.status === "ready") {
           oCheck.status = "done";
           render();
         }
-      }, 5000);
+      }, 5000); // 5-second delay
     }
 
+    // This function handles both tap-to-cycle and click-to-select
     window.cycleStatus = function(orderNumber) {
       const o = orders[orderNumber];
-      selectedOrderNumber = orderNumber;
-
-      if (!o) return render();
-
-      if (o.status === "cancelled" || o.status === "done") {
-        return render();
+      
+      selectedOrderNumber = orderNumber; // Always select when tapping
+      
+      if (!o) {
+         renderDetails();
+         return;
+      }
+      
+      // If the order is currently done or cancelled, just select it, don't cycle.
+      if (o.status === 'cancelled' || o.status === 'done') {
+         render();
+         return;
       }
 
+      // Active status cycling
       if (o.status === "new") {
         o.status = "in-progress";
       } else if (o.status === "in-progress") {
         o.status = "ready";
+
+        // 1. Send Ready status to the server
         sendMessage({ type: "ORDER_READY", orderNumber });
+
+        // 2. Client immediately initiates the ready actions (sound/TTS and the move-to-done timeout)
         triggerReadyActions(orderNumber, { playSound: true });
       } else if (o.status === "ready") {
-        o.status = "done";
+         // Tapping ready order immediately marks it done
+         o.status = "done";
       }
 
       render();
@@ -621,63 +723,50 @@
 
     function markReady(orderNumber, options = {}) {
       const o = orders[orderNumber];
-      if (!o || o.status === "done" || o.status === "cancelled") return;
+      if (!o || o.status === 'done' || o.status === 'cancelled') return;
+
+      // Ensure local status is "ready"
       o.status = "ready";
       selectedOrderNumber = orderNumber;
       render();
+
+      // Trigger ready actions (sound, TTS, and 5-second move to DONE)
       triggerReadyActions(orderNumber, options);
     }
-
+    
+    // --- TIMER UPDATE LOOP ---
     function updateTimers() {
-      document.querySelectorAll(".bubble").forEach((bubbleEl) => {
+      document.querySelectorAll('.bubble').forEach(bubbleEl => {
         const orderNumber = bubbleEl.dataset.order;
-        const order = orders[orderNumber];
-        const timerEl = bubbleEl.querySelector(".bubble-timer");
-        if (order && timerEl) timerEl.textContent = formatTimeElapsed(order.createdAt);
+        const order = orders[orderNumber]; 
+        
+        const timerEl = bubbleEl.querySelector('.bubble-timer');
+        
+        if (order && timerEl) {
+          timerEl.textContent = formatTimeElapsed(order.createdAt);
+        }
       });
     }
-    setInterval(updateTimers, 1000);
+    setInterval(updateTimers, 1000); 
+    // ---------------------------------------------------
+
 
     /* -----------------------------
       RENDERING
     --------------------------------*/
-    function renderItemsHtml(items = [], maxItems = 5) {
-      if (!Array.isArray(items) || items.length === 0) {
-        return `<div class="items-more">No item details.</div>`;
-      }
-
-      const slice = items.slice(0, maxItems);
-      const rows = slice.map((item) => {
-        const name = escapeHtml(item?.name || "Item");
-        const qty = Number(item?.quantity ?? 1);
-        const mods = Array.isArray(item?.modifiers) ? item.modifiers.filter(Boolean) : [];
-        const modsShown = mods.slice(0, 3).map(escapeHtml).join(", ");
-        const modsMore = mods.length > 3 ? `, +${mods.length - 3} more` : "";
-
-        return `
-          <div>
-            <div class="item-row">
-              <div class="item-name">${name}</div>
-              <div class="item-qty">x${Number.isFinite(qty) ? qty : 1}</div>
-            </div>
-            ${mods.length ? `<div class="item-mods">+ ${modsShown}${modsMore}</div>` : ``}
-          </div>
-        `;
-      }).join("");
-
-      const more = items.length > maxItems
-        ? `<div class="items-more">+ ${items.length - maxItems} more item(s)</div>`
-        : ``;
-
-      return rows + more;
-    }
-
     function render() {
-      const list = Object.values(orders).sort((a, b) => a.createdAt - b.createdAt);
+      // List of all order objects
+      const list = Object.values(orders).sort(
+        (a, b) => a.createdAt - b.createdAt
+      );
 
+      // Active orders are NOT 'done' and NOT 'cancelled'
       const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
+      
+      // Completed/Done orders ARE 'done' OR 'cancelled'
       const done = list.filter((o) => o.status === "done" || o.status === "cancelled");
 
+      // Active bubbles (top)
       bubbleContainer.innerHTML = "";
 
       if (active.length === 0) {
@@ -688,71 +777,126 @@
           const b = document.createElement("div");
           b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
-
-          b.setAttribute("draggable", true);
+          b.setAttribute('draggable', true); // Enable dragging for active cards
           b.ondragstart = handleDragStart;
           b.ondragend = handleDragEnd;
-          b.onclick = () => window.cycleStatus(o.orderNumber);
+          b.onclick = () => window.cycleStatus(o.orderNumber); // Re-added click handler
 
-          const statusText =
-            o.status === "new" ? "NEW" :
+          const statusText = 
+            o.status === "new" ? "NEW" : 
             o.status === "in-progress" ? "IN PROGRESS" : "READY";
 
-          const itemCountText =
-            o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
-
           b.innerHTML = `
+            <div class="bubble-number">#${o.orderNumber}</div>
+            <div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div> 
+            <div class="bubble-meta">
+              ${o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : ""}
+            </div>
             <div class="bubble-status">${statusText}</div>
-
-            <div class="bubble-header">
-              <div class="bubble-number">#${escapeHtml(o.orderNumber)}</div>
-              <div class="bubble-metas">
-                <div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div>
-                <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
-              </div>
-            </div>
-
-            <div class="bubble-items">
-              ${renderItemsHtml(o.items, 5)}
-            </div>
           `;
-
           bubbleContainer.appendChild(b);
         });
       }
 
+      // Done bubbles (bottom)
       doneContainer.innerHTML = "";
       done.forEach((o) => {
         const isSelected = o.orderNumber === selectedOrderNumber;
-        const statusClass = o.status === "cancelled" ? "cancelled" : "done";
+        const statusClass = o.status === 'cancelled' ? 'cancelled' : 'done';
+        const statusText = statusClass.toUpperCase();
 
         const b = document.createElement("div");
         b.className = `bubble ${statusClass}${isSelected ? " selected" : ""}`;
         b.dataset.order = o.orderNumber;
-
-        b.setAttribute("draggable", true);
+        b.setAttribute('draggable', true); // Enable dragging for done cards
         b.ondragstart = handleDragStart;
         b.ondragend = handleDragEnd;
 
-        // Click: just highlight (no cycling)
-        b.onclick = () => { selectedOrderNumber = o.orderNumber; render(); };
-
-        const itemCountText =
-          o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
+        // Click: select and show details, but DO NOT cycle status.
+        b.onclick = () => {
+          selectedOrderNumber = o.orderNumber;
+          render();
+        };
 
         b.innerHTML = `
-          <div class="bubble-status">${statusClass.toUpperCase()}</div>
-
-          <div class="bubble-header">
-            <div class="bubble-number">#${escapeHtml(o.orderNumber)}</div>
-            <div class="bubble-metas">
-              <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
-            </div>
-          </div>
+          <div class="bubble-number">#${o.orderNumber}</div>
+          <div class="bubble-status">${statusText}</div>
         `;
-
         doneContainer.appendChild(b);
       });
+
+      renderDetails();
+    }
+
+    function renderDetails() {
+      const o = selectedOrderNumber ? orders[selectedOrderNumber] : null; 
+
+      // Remove selected class from all bubbles first
+      document.querySelectorAll('.bubble').forEach(b => b.classList.remove('selected'));
+      // Add selected class to the currently selected bubble
+      if(selectedOrderNumber) {
+        document.querySelector(`.bubble[data-order="${selectedOrderNumber}"]`)?.classList.add('selected');
+      }
+
+      if (!o) {
+        detailsPanel.innerHTML = `
+          <div class="details-panel-empty">
+            Select an order card to see itemized details and prep notes.
+          </div>
+        `;
+        return;
+      }
+
+      const statusLabel =
+        o.status === "new"
+          ? "NEW"
+          : o.status === "in-progress"
+          ? "IN PROGRESS"
+          : o.status === "ready"
+          ? "READY"
+          : o.status === "cancelled"
+          ? "CANCELLED"
+          : "DONE";
+
+      const items = o.items || [];
+      const itemsHtml =
+        items.length > 0
+          ? items
+              .map(
+                (item) => `
+                <div class="details-item">
+                  <span class="details-item-name">${item.name}</span>
+                  <span class="details-item-qty">x${item.quantity}</span>
+                </div>
+                ${ 
+                  item.modifiers && item.modifiers.length > 0
+                    ? item.modifiers
+                        .map(
+                          (modName) => `
+                            <div class="details-modifiers">
+                              + ${modName}
+                            </div>
+                          `
+                        )
+                        .join("")
+                    : ""
+                }
+              `
+              )
+              .join("")
+          : '<div class="details-panel-empty">No item details.</div>';
+
+      detailsPanel.innerHTML = `
+        <div class="details-order-title">Order #${o.orderNumber}</div>
+        <div class="details-meta">
+          Status: <strong>${statusLabel}</strong><br/>
+          Items: ${o.itemCount ?? (o.items && o.items.length ? o.items.length : 0)}
+        </div>
+        <div class="details-items-title">Items</div>
+        <div class="details-items">
+          ${itemsHtml}
+        </div>
+      `;
     }
 
     connect();
