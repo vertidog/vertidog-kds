@@ -77,16 +77,6 @@
       background: #22c55e;
       box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
     }
-    .disconnected .dot {
-      background: #f97316;
-      box-shadow: 0 0 8px rgba(249, 115, 22, 0.8);
-    }
-    .disconnected {
-        background: rgba(249, 115, 22, 0.12) !important;
-        border: 1px solid rgba(249, 115, 22, 0.3) !important;
-        color: #fdbf74 !important;
-    }
-
 
     /* LAYOUT: Main Content */
     .layout {
@@ -532,11 +522,11 @@
       const dot = connectionStatus.querySelector(".dot");
       const label = connectionStatus.querySelector("span:last-child");
 
-      connectionStatus.classList.toggle('disconnected', !connected);
-
       if (connected) {
+        dot.style.background = "#22c55e";
         label.textContent = "Connected";
       } else {
+        dot.style.background = "#f97316";
         label.textContent = "Reconnecting…";
       }
     }
@@ -576,19 +566,15 @@
     function handleMessage(msg) {
       switch (msg.type) {
         case "NEW_ORDER":
-        case "ORDER_REACTIVATED_CONFIRM": // Added confirmation logic in case it's needed
           addOrUpdate(msg.orderNumber, msg.status || "new", msg);
           break;
 
         case "SYNC_STATE":
-          // Clear and rebuild the state based on server sync
-          Object.keys(orders).forEach(key => delete orders[key]);
           (msg.orders || []).forEach((o) =>
             addOrUpdate(o.orderNumber, o.status || "new", o)
           );
-          // Auto-select the first order if none is selected
           if (!selectedOrderNumber && (msg.orders || []).length > 0) {
-            selectedOrderNumber = msg.orders.find(o => o.status !== 'done' && o.status !== 'cancelled')?.orderNumber;
+            selectedOrderNumber = msg.orders[0].orderNumber;
           }
           break;
 
@@ -609,6 +595,7 @@
         const orderNumber = event.target.dataset.order;
         event.dataTransfer.setData('text/plain', orderNumber);
         event.target.classList.add('dragging');
+        // We no longer need to disable/re-enable the click handler here.
     }
 
     // Clean up after the drag ends
@@ -630,38 +617,26 @@
     }
 
     // Handle the actual drop action
-    window.handleDrop = function(event, targetType) {
+    function handleDrop(event, targetType) {
         event.preventDefault();
         const orderNumber = event.dataTransfer.getData('text/plain');
         
-        // Remove drag-over classes from both targets
+        // Remove drag-over classes
         bubbleContainer.classList.remove('drag-over-active');
         document.getElementById('completed-section').classList.remove('drag-over-done');
 
         if (!orderNumber || !orders[orderNumber]) return;
 
-        const orderId = orders[orderNumber].orderId; // Get the server ID
-
         if (targetType === 'active') {
             // Dragged to main screen -> Must become ACTIVE ('in-progress')
             orders[orderNumber].status = 'in-progress';
-            
-            // Send message to server to reset KDS status lock
-            sendMessage({ 
-                type: "ORDER_REACTIVATED", 
-                orderId: orderId, 
-                orderNumber: orderNumber
-            });
+            // We should also inform the server to unlock the status if it was locked as 'done' or 'cancelled'
+            sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
         } else if (targetType === 'done') {
             // Dragged to completed section -> Must become DONE
             orders[orderNumber].status = 'done';
-            
-            // Send message to server to mark done and persist status
-            sendMessage({ 
-                type: "ORDER_SKIPPED_DONE", 
-                orderId: orderId, 
-                orderNumber: orderNumber
-            });
+            // Inform server to mark it done
+            sendMessage({ type: "ORDER_SKIPPED_DONE", orderNumber: orderNumber });
         }
 
         selectedOrderNumber = orderNumber;
@@ -703,17 +678,8 @@
       // Set timer to move to 'done' after 5 seconds
       setTimeout(() => {
         const oCheck = orders[orderNumber];
-        // Only move to 'done' if status is still 'ready' (i.e., not manually moved or cycled)
         if (oCheck && oCheck.status === "ready") {
           oCheck.status = "done";
-          
-          // CRITICAL: Send immediate move-to-done message to server to persist status
-          sendMessage({ 
-                type: "ORDER_SKIPPED_DONE", 
-                orderId: oCheck.orderId, 
-                orderNumber: oCheck.orderNumber
-            });
-            
           render();
         }
       }, 5000); // 5-second delay
@@ -742,22 +708,14 @@
       } else if (o.status === "in-progress") {
         o.status = "ready";
 
-        // 1. Send Ready status to the server (server confirms and broadcasts to all)
+        // 1. Send Ready status to the server
         sendMessage({ type: "ORDER_READY", orderNumber });
 
-        // NOTE: The triggerReadyActions is now handled in handleMessage on 'ORDER_READY_CONFIRM'
-        // This ensures the sound/timer is initiated only after server acknowledged the status change.
-        
+        // 2. Client immediately initiates the ready actions (sound/TTS and the move-to-done timeout)
+        triggerReadyActions(orderNumber, { playSound: true });
       } else if (o.status === "ready") {
          // Tapping ready order immediately marks it done
          o.status = "done";
-         
-         // CRITICAL: Send immediate move-to-done message to server to persist status
-         sendMessage({ 
-            type: "ORDER_SKIPPED_DONE", 
-            orderId: o.orderId, 
-            orderNumber: o.orderNumber
-         });
       }
 
       render();
@@ -789,7 +747,6 @@
         }
       });
     }
-    // Update every second for smooth timer display
     setInterval(updateTimers, 1000); 
     // ---------------------------------------------------
 
@@ -815,9 +772,6 @@
       if (active.length === 0) {
         bubbleContainer.appendChild(emptyState);
       } else {
-        // Ensure empty state is hidden if there are active orders
-        emptyState.style.display = 'none';
-        
         active.forEach((o) => {
           const isSelected = o.orderNumber === selectedOrderNumber;
           const b = document.createElement("div");
