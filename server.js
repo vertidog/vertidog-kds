@@ -7,7 +7,7 @@ const http = require("http");
 const { WebSocketServer } = require("ws");
 const bodyParser = require("body-parser");
 const path = require("path");
-const fs = require('fs'); // <--- 1. ADDED: File system module for persistence
+const fs = require('fs'); // <--- ADDED: File system module for persistence
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -21,9 +21,9 @@ const SQUARE_BASE_URL =
     : "https://connect.squareup.com";
 
 // In-memory store keyed by orderId
-let orders = {}; // <--- Must be `let` for re-assignment in loadKDSState
+let orders = {}; // <--- Changed to `let` for re-assignment in loadKDSState
 
-// ---------------- Persistence Functions ----------------
+// ---------------- Persistence Functions (REINSTATED) ----------------
 const ORDERS_FILE = path.join(__dirname, "orders.json");
 
 function saveKDSState() {
@@ -120,7 +120,7 @@ async function fetchOrderFromSquare(orderId) {
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-loadKDSState(); // <--- 2. CALLED AT STARTUP
+loadKDSState(); // <--- CALLED AT STARTUP
 
 wss.on("connection", (ws) => {
   console.log("KDS connected");
@@ -147,6 +147,7 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "ORDER_REACTIVATED" && data.orderNumber) {
+        // Handle drag from done back to active
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -160,6 +161,7 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "ORDER_SKIPPED_DONE" && data.orderNumber) {
+        // Handle drag to done without cycling
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -173,10 +175,11 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "SYNC_REQUEST") {
+        // Handle explicit sync request from kitchen.html connect()
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
-            orders: Object.values(orders), // <--- FIXED: SEND ALL ORDERS
+            orders: Object.values(orders), // <--- FIXED: SEND ALL ORDERS (NO FILTERING)
           })
         );
       }
@@ -189,7 +192,7 @@ wss.on("connection", (ws) => {
   ws.send(
     JSON.stringify({
       type: "SYNC_STATE",
-      orders: Object.values(orders), // <--- FIXED: SEND ALL ORDERS
+      orders: Object.values(orders), // <--- FIXED: SEND ALL ORDERS (NO FILTERING)
     })
   );
 
@@ -244,7 +247,6 @@ app.post("/square/webhook", async (req, res) => {
 
     let orderNumber = null;
     if (fullOrder) {
-      // Prioritize Square's display fields (display_id is usually the visible number)
       orderNumber =
         fullOrder.ticket_name ||
         fullOrder.order_number ||
@@ -292,7 +294,7 @@ app.post("/square/webhook", async (req, res) => {
 
     const merged = {
       orderId,
-      // CRITICAL FIX: Prioritize the existing order number if it's already in the system
+      // CRITICAL: Prioritize the existing order number from persistence
       orderNumber: existing.orderNumber || orderNumber || orderId.slice(-6), 
       status: kdsStatus, // Use the determined status
       createdAt: existing.createdAt || Date.now(),
