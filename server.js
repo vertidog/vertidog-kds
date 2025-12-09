@@ -21,7 +21,7 @@ const SQUARE_BASE_URL =
     : "https://connect.squareup.com";
 
 // In-memory store keyed by orderId
-let orders = {}; // <--- Changed to `let` for re-assignment in loadKDSState
+let orders = {}; // <--- CRITICAL FIX: Changed to 'let' for re-assignment by loadKDSState
 
 // ---------------- Persistence Functions (REINSTATED) ----------------
 const ORDERS_FILE = path.join(__dirname, "orders.json");
@@ -120,7 +120,7 @@ async function fetchOrderFromSquare(orderId) {
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-loadKDSState(); // <--- CALLED AT STARTUP
+loadKDSState(); // <--- CALLED AT STARTUP TO LOAD ALL PREVIOUS ORDERS
 
 wss.on("connection", (ws) => {
   console.log("KDS connected");
