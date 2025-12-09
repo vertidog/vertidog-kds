@@ -21,7 +21,7 @@ const SQUARE_BASE_URL =
     : "https://connect.squareup.com";
 
 // In-memory store keyed by orderId
-let orders = {}; // <--- CRITICAL FIX: Changed to 'let' for re-assignment in loadKDSState
+let orders = {}; // <--- CRITICAL FIX: Must be 'let' for re-assignment in loadKDSState
 
 // ---------------- Persistence Functions (REQUIRED FOR STATUS MEMORY) ----------------
 const ORDERS_FILE = path.join(__dirname, "orders.json");
@@ -147,6 +147,7 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "ORDER_REACTIVATED" && data.orderNumber) {
+        // Handle drag from done back to active
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -160,6 +161,7 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "ORDER_SKIPPED_DONE" && data.orderNumber) {
+        // Handle drag to done without cycling
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -173,6 +175,7 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "SYNC_REQUEST") {
+        // Handle explicit sync request from kitchen.html connect()
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
