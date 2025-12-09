@@ -263,8 +263,8 @@ app.post("/square/webhook", async (req, res) => {
 
     const merged = {
       orderId,
-      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6),
-      status: kdsStatus,
+      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6), // Final selection, preferring Square's
+      status: kdsStatus, // Use the determined status
       createdAt: existing.createdAt || Date.now(),
       itemCount,
       items,
@@ -291,11 +291,11 @@ app.post("/square/webhook", async (req, res) => {
 // ---------------- Test endpoint ----------------
 
 app.get("/test-order", (req, res) => {
-  const ticketNum = getNextTestTicketNumber();
+  const ticketNum = getNextTestTicketNumber(); // <--- Sequential 001, 002... for testing
   const orderId = `TEST-${ticketNum}-${Date.now()}`;
   const order = {
     orderId,
-    orderNumber: ticketNum,
+    orderNumber: ticketNum, // <--- Clean 3-digit number
     status: "new",
     createdAt: Date.now(),
     items: [
