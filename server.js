@@ -28,7 +28,6 @@ const orders = {};
 
 function saveKDSState() {
     try {
-        // Only save the necessary fields (ID, orderNumber, KDS status, and creation time)
         const simplifiedOrders = Object.values(orders).map(o => ({
             orderId: o.orderId,
             orderNumber: o.orderNumber,
@@ -48,17 +47,16 @@ function loadKDSState() {
             const data = fs.readFileSync(DATA_FILE, 'utf8');
             const simplifiedOrders = JSON.parse(data);
             
-            // Merge loaded KDS status into the 'orders' object
             simplifiedOrders.forEach(o => {
                 const existingOrder = orders[o.orderId] || {};
                 
-                // CRITICAL FIX: Prioritize the persistent status from the file
+                // CRITICAL MERGE: Prioritize the persistent status from the file
                 orders[o.orderId] = {
-                    ...existingOrder,       // Keep any other keys (like items/itemCount) if they were loaded first
+                    ...existingOrder,       
                     orderId: o.orderId,
                     orderNumber: o.orderNumber,
                     status: o.status,       // <--- PERSISTENT STATUS WINS
-                    createdAt: o.createdAt  // Keep the original timestamp
+                    createdAt: o.createdAt  
                 };
             });
             console.log(`✅ Loaded ${simplifiedOrders.length} orders from disk. Persistent status applied.`);
@@ -68,7 +66,7 @@ function loadKDSState() {
     }
 }
 
-loadKDSState(); // <--- CRITICAL FIX: Load state on server startup
+loadKDSState(); // Load state on server startup
 
 // ---------------- KDS SEQUENTIAL COUNTER (FOR TEST ENDPOINT ONLY) ----------------
 let testOrderCounter = 0; 
@@ -149,11 +147,9 @@ wss.on("connection", (ws) => {
       
       let orderToUpdate;
       
-      // Determine which key to use (orderId is mandatory for persistence)
       const orderKey = data.orderId || (data.orderNumber && Object.values(orders).find(o => o.orderNumber === data.orderNumber)?.orderId);
       if (!orderKey) {
         if (data.type !== "SYNC_REQUEST") console.log(`⚠️ Cannot process message ${data.type}: orderKey missing.`);
-        // Continue to SYNC_REQUEST if no key is found
       } else {
         orderToUpdate = orders[orderKey];
       }
@@ -162,29 +158,29 @@ wss.on("connection", (ws) => {
         
           orderToUpdate.status = "ready";
           orders[orderKey] = orderToUpdate; 
-          saveKDSState(); // <--- FIX: Save status change
+          saveKDSState();
           
           broadcast({
             type: "ORDER_READY_CONFIRM",
             orderNumber: orderToUpdate.orderNumber,
           });
 
-      } else if (data.type === "ORDER_REACTIVATED" && orderToUpdate) { // <--- ADDED: Client dragged to active
+      } else if (data.type === "ORDER_REACTIVATED" && orderToUpdate) { 
           
           orderToUpdate.status = 'in-progress'; 
           orders[orderKey] = orderToUpdate; 
-          saveKDSState(); // <--- FIX: Save status change
+          saveKDSState(); 
 
           broadcast({
-            type: "NEW_ORDER", // Sends full order to trigger client update
+            type: "NEW_ORDER", 
             ...orderToUpdate,
           });
 
-      } else if (data.type === "ORDER_SKIPPED_DONE" && orderToUpdate) { // <--- ADDED: Client dragged to done or force-tapped done
+      } else if (data.type === "ORDER_SKIPPED_DONE" && orderToUpdate) { 
           
           orderToUpdate.status = 'done'; 
           orders[orderKey] = orderToUpdate; 
-          saveKDSState(); // <--- FIX: Save status change
+          saveKDSState(); 
 
           broadcast({
             type: "NEW_ORDER",
@@ -192,12 +188,11 @@ wss.on("connection", (ws) => {
           });
 
       } else if (data.type === "SYNC_REQUEST") {
-        // Handle explicit sync request from kitchen.html connect()
+        // FIXED: Send *all* orders so client can handle the done/active split
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
-            // CRITICAL FILTER: Only send active/ready/new orders on initial sync (filter out 'done'/'cancelled')
-            orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
+            orders: Object.values(orders), // <--- NOW SENDING ALL ORDERS
           })
         );
       }
@@ -206,11 +201,11 @@ wss.on("connection", (ws) => {
     }
   });
 
-  // Initial sync request (only send active orders)
+  // FIXED: Initial sync should also send *all* orders
   ws.send(
     JSON.stringify({
       type: "SYNC_STATE",
-      orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
+      orders: Object.values(orders), // <--- NOW SENDING ALL ORDERS
     })
   );
 
@@ -339,7 +334,7 @@ app.post("/square/webhook", async (req, res) => {
 
     orders[orderId] = merged;
 
-    saveKDSState(); // <--- FIX: Save state after any Square update
+    saveKDSState(); 
 
     console.log("✅ Final KDS order object:", merged);
 
@@ -376,7 +371,7 @@ app.get("/test-order", (req, res) => {
   order.itemCount = order.items.reduce((sum, it) => sum + it.quantity, 0);
   orders[orderId] = order;
 
-  saveKDSState(); // <--- FIX: Save state after test order
+  saveKDSState(); 
 
   broadcast({
     type: "NEW_ORDER",
