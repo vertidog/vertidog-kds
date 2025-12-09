@@ -7,7 +7,6 @@ const http = require("http");
 const { WebSocketServer } = require("ws");
 const bodyParser = require("body-parser");
 const path = require("path");
-const fs = require("fs"); // <--- ADDED: File System module for state persistence
 // NOTE: crypto module needed for signature verification (postponed)
 // const crypto = require("crypto"); 
 
@@ -23,30 +22,7 @@ const SQUARE_BASE_URL =
     : "https://connect.squareup.com";
 
 // In-memory store keyed by orderId
-let orders = {};
-const STATE_FILE = path.join(__dirname, 'orders.json'); // File path for persistence
-
-// --- KDS State Loading (Robust) ---
-try {
-  if (fs.existsSync(STATE_FILE)) {
-    const rawData = fs.readFileSync(STATE_FILE, 'utf8');
-    // Check if file is non-empty before parsing to prevent SyntaxError
-    if (rawData.trim()) { 
-      orders = JSON.parse(rawData);
-      console.log('✅ Successfully loaded KDS state from orders.json');
-    } else {
-      console.log('📝 orders.json file is empty. Initializing with empty state.');
-    }
-  } else {
-    console.log('📝 orders.json file not found. Initializing with empty state.');
-  }
-} catch (e) {
-  // If parsing fails (like 'Unexpected end of JSON input'), initialize empty
-  console.error("❌ Error loading KDS state:", e.message, "Initializing with empty state.");
-  orders = {}; 
-}
-// ----------------------------------
-
+const orders = {};
 
 // ---------------- KDS SEQUENTIAL COUNTER (FOR TEST ENDPOINT ONLY) ----------------
 // This counter is only used by the /test-order endpoint to simulate clean Square numbers
@@ -146,11 +122,46 @@ wss.on("connection", (ws) => {
             orderNumber: orderToMark.orderNumber,
           });
         }
+      } else if (data.type === "ORDER_REACTIVATED" && data.orderNumber) {
+        // RECALL: Bring order back from 'done' or 'cancelled' to 'in-progress'
+        const orderToMark = Object.values(orders).find(
+          (o) => o.orderNumber === data.orderNumber
+        );
+
+        if (orderToMark) {
+          orderToMark.status = "in-progress";
+          orders[orderToMark.orderId] = orderToMark;
+
+          console.log(`Order ${data.orderNumber} RECALLED/REACTIVATED.`);
+          
+          broadcast({
+            type: "NEW_ORDER", // Use NEW_ORDER to trigger a refresh on all screens
+            ...orderToMark,
+          });
+        }
+      } else if (data.type === "ORDER_CANCELLED" && data.orderNumber) {
+        // CANCEL: Mark an active order as 'cancelled'
+        const orderToMark = Object.values(orders).find(
+          (o) => o.orderNumber === data.orderNumber
+        );
+
+        if (orderToMark) {
+          orderToMark.status = "cancelled";
+          orders[orderToMark.orderId] = orderToMark;
+          
+          console.log(`Order ${data.orderNumber} CANCELLED by KDS user.`);
+
+          broadcast({
+            type: "NEW_ORDER", // Use NEW_ORDER to trigger a refresh on all screens
+            ...orderToMark,
+          });
+        }
       } else if (data.type === "SYNC_REQUEST") {
         // Handle explicit sync request from kitchen.html connect()
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
+            // Only send active orders for initial KDS screen load
             orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
           })
         );
