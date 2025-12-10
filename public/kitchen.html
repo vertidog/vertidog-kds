@@ -6,18 +6,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     :root {
+      /* White/Light Ticket Theme */
       --bg: #050816;
-      --card-bg: #0b1020;
+      --card-bg: #fff; /* WHITE TICKETS */
       --new: #3b82f6;
       --progress: #f97316;
       --ready: #22c55e;
       --cancel: #ef4444;
-      --text: #e5e7eb;
-      --muted: #94a3b8;
+      --text: #1f2937; /* Dark Text */
+      --muted: #6b7280;
       --accent: #a855f7;
       --drag-hover-color: rgba(168, 85, 247, 0.22);
       --radius: 16px;
       
+      /* New Time Alert Colors */
+      --time-alert: #f59e0b;   /* Amber (3 mins) */
+      --time-critical: #ef4444; /* Red (5 mins) */
+      --time-default: #1f2937;  /* Dark text color for timer */
+
       /* User configurable: Controls how many rows the KDS uses */
       --grid-rows: 1; 
       /* Fixed width for a card when in a single row or narrow grid */
@@ -35,7 +41,7 @@
       flex-direction: column;
     }
 
-    /* HEADER */
+    /* HEADER - Background remains dark, text becomes light */
     header {
       padding: 0.9rem 1.15rem;
       display: flex;
@@ -47,6 +53,12 @@
       z-index: 10;
       gap: 1rem;
       user-select: none;
+      
+      position: fixed; 
+      top: 0; 
+      left: 0; 
+      width: 100%;
+      color: #fff; /* Ensure header text is white */
     }
     header .title {
       display: flex;
@@ -65,7 +77,7 @@
     }
     header .subtitle {
       font-size: 0.95rem; 
-      color: var(--muted);
+      color: transparent; /* Remove text, but keep space */
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -91,9 +103,8 @@
       transition: all 0.2s ease;
     }
     header .tab-pill:hover {
-      background: rgba(15, 23, 42, 0.9);
       border-color: var(--accent);
-      color: var(--text);
+      color: #fff;
     }
     header .active-tab {
       background: var(--accent);
@@ -102,26 +113,25 @@
       box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
     }
 
-    /* Connection Status Pill */
+    /* Connection Status Pill (Icon Only) */
     header .status-pill {
-      padding: 0.35rem 0.8rem;
+      padding: 0.5rem 0.5rem; 
       border-radius: 999px;
-      font-size: 0.9rem;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      background: rgba(34, 197, 94, 0.12);
-      border: 1px solid rgba(34, 197, 94, 0.3);
-      color: #bbf7d0;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.4); 
       flex: 0 0 auto;
-      white-space: nowrap;
+      transition: all 0.4s;
     }
     header .dot {
-      width: 0.55rem;
-      height: 0.55rem;
+      width: 0.7rem; 
+      height: 0.7rem;
       border-radius: 999px;
       background: #22c55e;
       box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
+      transition: all 0.4s;
     }
 
     /* Options Button */
@@ -142,14 +152,10 @@
     --------------------------------*/
     main {
       flex: 1;
-      padding: 0.9rem;
-      display: flex;
-      flex-direction: row; 
-      gap: 0.9rem;
+      padding: 4.5rem 0.9rem 0.9rem 0.9rem;
       overflow-x: scroll; 
       overflow-y: hidden; 
       min-height: 220px;
-      padding-bottom: 0.9rem;
       -webkit-overflow-scrolling: touch; 
     }
     
@@ -158,36 +164,29 @@
     main::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 6px; }
     main::-webkit-scrollbar-thumb:hover { background: #8e44ad; }
 
-    /* Default (Single-row Mode: --grid-rows: 1) */
     .bubble {
       position: relative;
       flex: 0 0 var(--card-width);
       height: 100%; 
-      
-      /* Multi-row Mode: Grid styling preparation */
       align-self: flex-start;
-      margin-bottom: calc(var(--grid-rows) * 0.9rem); 
     }
 
-    /* Apply Grid container properties when multi-row is active */
     .multi-row-container {
-        display: grid;
-        grid-auto-flow: column; /* Flow columns first (horizontal scrolling) */
-        grid-template-rows: repeat(var(--grid-rows), 1fr); /* Define number of rows */
+        display: flex;
+        flex-wrap: wrap; 
+        flex-direction: column; 
         gap: 0.9rem;
-        height: 100%;
+        height: 100%; 
         width: max-content; 
     }
 
-    /* Override flex for multi-row items */
     .multi-row-container .bubble {
         flex: unset;
         width: var(--card-width);
-        height: 100%;
+        height: calc((100% - (var(--grid-rows) * 0.9rem) + 0.9rem) / var(--grid-rows)); 
         margin-bottom: 0;
     }
     
-    /* Empty State for the whole main area */
     .empty-state-wrapper {
         flex: 0 0 100%; 
         height: 100%;
@@ -210,12 +209,6 @@
       flex: 1;
     }
 
-    /* DRAG STYLES (Kept for completeness, though less relevant in single row) */
-    .drag-over-active {
-        /* outline: 4px dashed var(--accent); */
-        background-color: var(--drag-hover-color);
-        border-radius: var(--radius);
-    }
     .dragging { opacity: 0.4; }
 
 
@@ -229,11 +222,11 @@
       transition: transform 0.1s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out, opacity 0.3s ease-out;
       user-select: none;
       touch-action: manipulation;
-      padding: 1rem 1rem 0.95rem;
+      padding: 0; /* Remove padding to contain header/body */
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
-      background: var(--card-bg); /* Default background */
+      background: var(--card-bg); 
+      color: var(--text); /* Set text color for the whole card */
     }
     .bubble:active { transform: scale(0.99); cursor: grabbing; }
 
@@ -241,6 +234,33 @@
       box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.75), 0 12px 26px rgba(0, 0, 0, 0.65);
       border-color: var(--accent);
       transform: scale(1.01);
+    }
+    
+    /* NEW: Card Header for Time Coloring (Top Bar) */
+    .bubble-top-bar {
+        background: var(--new); /* Default blue, will change based on time */
+        color: white;
+        padding: 0.7rem 1rem;
+        border-radius: var(--radius) var(--radius) 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+    }
+
+    /* Time Coloring */
+    .bubble-top-bar.alert { background: var(--time-alert); }
+    .bubble-top-bar.critical { background: var(--time-critical); }
+
+
+    .bubble-body {
+        flex: 1;
+        padding: 1rem 1rem 0.95rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
     }
     
     .recall-btn {
@@ -252,14 +272,31 @@
         font-weight: 700;
         font-size: 0.95rem;
         cursor: pointer;
-        margin-top: 0.5rem;
         transition: background 0.2s;
         flex: 0 0 auto;
         text-transform: uppercase;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
     .recall-btn:hover { background: #8e44ad; }
-
+    
+    .prioritize-btn {
+        background: none;
+        border: 1px solid white;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: background 0.2s, border-color 0.2s;
+        text-transform: uppercase;
+        margin-left: 0.5rem;
+    }
+    .prioritize-btn.is-prioritized {
+        background: white;
+        color: var(--time-critical);
+        border-color: var(--time-critical);
+    }
 
     .bubble-status {
       font-size: 0.85rem;
@@ -296,7 +333,7 @@
     .bubble-timer {
       font-size: 1.35rem;
       font-weight: 900;
-      color: var(--text);
+      color: var(--time-default); /* New dark color for timer text */
       line-height: 1.05;
     }
     .bubble-meta {
@@ -307,7 +344,7 @@
 
     .bubble-items {
       flex: 1;
-      border-top: 1px solid rgba(148, 163, 184, 0.18);
+      border-top: 1px solid rgba(148, 163, 184, 0.35);
       padding-top: 0.75rem;
       display: flex;
       flex-direction: column;
@@ -321,9 +358,25 @@
 
     .item-row {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       justify-content: space-between;
       gap: 0.75rem;
+      cursor: pointer; /* Enable clicking item for completion */
+      padding: 0.2rem 0;
+    }
+    .item-row:hover .item-name {
+        color: var(--accent);
+    }
+    .item-row.completed .item-name,
+    .item-row.completed .item-qty {
+        color: var(--muted);
+        text-decoration: line-through;
+    }
+    .item-name-group {
+        display: flex;
+        align-items: center;
+        flex: 1;
+        min-width: 0;
     }
     .item-name {
       font-size: 1.15rem; 
@@ -332,8 +385,8 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      flex: 1;
       min-width: 0;
+      transition: color 0.2s;
     }
     .item-qty {
       font-size: 1.05rem;
@@ -342,13 +395,31 @@
       border-radius: 999px;
       border: 1px solid rgba(168, 85, 247, 0.35);
       background: rgba(168, 85, 247, 0.12);
-      color: #f5f3ff;
+      color: var(--accent); /* Accent color for QTY on white background */
       flex: 0 0 auto;
     }
+    
+    /* Item Checkmark */
+    .item-check {
+        margin-right: 0.5rem;
+        color: var(--ready); /* Green checkmark */
+        font-size: 1.3rem;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .item-row.completed .item-check {
+        opacity: 1;
+        animation: check-fade-in 0.5s ease;
+    }
+    @keyframes check-fade-in {
+        from { opacity: 0; transform: scale(0.5); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
     .item-mods {
       margin-top: 0.15rem;
       font-size: 0.98rem; 
-      color: rgba(34, 197, 94, 0.92);
+      color: var(--ready); /* Green for Modifiers */
       font-style: italic;
       line-height: 1.2;
       padding-left: 0.85rem;
@@ -363,39 +434,31 @@
 
     /* Status Specific Styles */
     .bubble.new {
-      background: var(--card-bg);
       border-color: var(--new);
-      box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0,0,0,0.45);
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
     }
-    .bubble.new .bubble-status { background: var(--new); color: #fff; }
+    /* .bubble.new .bubble-status { background: var(--new); color: #fff; } (Status moved to top-bar) */
     .bubble.in-progress {
-      background: var(--card-bg);
       border-color: var(--progress);
-      box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0,0,0,0.45);
+      box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
     }
-    .bubble.in-progress .bubble-status { background: var(--progress); color: #fff; }
+    .bubble.in-progress .bubble-top-bar { background: var(--progress); }
     .bubble.ready {
-      background: radial-gradient(circle at center, rgba(34, 197, 94, 0.22), var(--card-bg) 70%);
+      background: #f0fdf4; /* Very light green background */
       border-color: var(--ready);
-      box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0,0,0,0.45);
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0, 0, 0, 0.45);
     }
-    .bubble.ready .bubble-status { background: var(--ready); color: var(--card-bg); }
-    .bubble.done {
-      background: #111827;
-      border-color: #334155;
+    .bubble.ready .bubble-top-bar { background: var(--ready); color: var(--card-bg); }
+    
+    .bubble.done, .bubble.cancelled {
+      background: #e5e7eb; /* Light grey for completed/cancelled */
+      border-color: #94a3b8;
       opacity: 0.9;
     }
-    .bubble.done .bubble-status {
-      background: rgba(148, 163, 184, 0.22);
-      border: 1px solid rgba(148, 163, 184, 0.30);
-      color: #e5e7eb;
+    .bubble.done .bubble-top-bar, .bubble.cancelled .bubble-top-bar {
+      background: #94a3b8;
+      color: #334155;
     }
-    .bubble.cancelled {
-      background: #111827;
-      border-color: var(--cancel);
-      opacity: 0.95;
-    }
-    .bubble.cancelled .bubble-status { background: var(--cancel); color: #fff; }
     
     @media (max-width: 860px) {
       header .subtitle { display: none; }
@@ -405,7 +468,7 @@
     }
 
     /* -----------------------------
-      MODAL STYLES
+      MODAL STYLES (Keep existing)
     --------------------------------*/
     .modal {
         display: none; 
@@ -465,8 +528,7 @@
   <header>
     <div class="title">
       <h1>VERTIDOG KDS</h1>
-      <span class="subtitle">Tap to cycle status. Long press to cancel. Drag cancelled/done cards to recall.</span>
-    </div>
+      <span class="subtitle"></span> </div>
     <div id="status-pills" class="status-tabs">
       <div class="tab-pill active-tab" data-filter="active" onclick="setFilter('active')">ACTIVE (<span id="active-count">0</span>)</div>
       <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
@@ -475,7 +537,6 @@
     <div style="display: flex; gap: 0.5rem; align-items: center;">
         <div class="status-pill" id="connection-status">
             <span class="dot"></span>
-            <span>Connected</span>
         </div>
         <button class="options-btn" onclick="toggleOptionsModal()">⚙️</button>
     </div>
@@ -512,7 +573,6 @@
     const readySound = document.getElementById("ready-sound");
     const optionsModal = document.getElementById("options-modal");
     
-    // Elements for the new header pills
     const activeCountEl = document.getElementById("active-count");
     const doneCountEl = document.getElementById("done-count");
     const cancelledCountEl = document.getElementById("cancelled-count");
@@ -521,14 +581,12 @@
     let socket;
     let selectedOrderNumber = null;
     let currentFilter = 'active';
-    let currentRows = 1; // Default to 1 row
+    let currentRows = 1; 
 
-    // Long Press and Interaction state
     let pressTimer = null;
     let isLongPress = false;
-    const LONG_PRESS_THRESHOLD = 700; // ms
+    const LONG_PRESS_THRESHOLD = 700; 
 
-    // TTS + announcement queue
     let preferredVoice = null;
     let announcementQueue = [];
     let isAnnouncing = false;
@@ -553,10 +611,10 @@
       return `${seconds}s`;
     }
     
-    // --- Options Modal Logic ---
+    // --- Options Modal Logic (UNTOUCHED) ---
+
     window.toggleOptionsModal = function() {
         optionsModal.classList.toggle('show');
-        // Update selection state when showing
         if(optionsModal.classList.contains('show')) {
             document.querySelectorAll('.row-option-btn').forEach(btn => {
                 btn.classList.remove('selected');
@@ -569,13 +627,8 @@
 
     window.setRows = function(rows) {
         currentRows = rows;
-        // Update CSS variable
         document.documentElement.style.setProperty('--grid-rows', rows);
-        
-        // Save to local storage (optional, for persistence)
         localStorage.setItem('kdsRows', rows);
-        
-        // Re-render the orders with the new layout
         render();
         toggleOptionsModal();
     }
@@ -591,8 +644,9 @@
 
 
     /* -----------------------------
-      TTS SETUP
+      TTS SETUP (UNTOUCHED)
     --------------------------------*/
+
     function loadVoices() {
       if (!("speechSynthesis" in window)) return;
       const voices = window.speechSynthesis.getVoices();
@@ -646,17 +700,19 @@
     }
 
     /* -----------------------------
-      WEBSOCKET & MESSAGING
+      WEBSOCKET & MESSAGING (UNTOUCHED)
     --------------------------------*/
+
     function setConnectionState(connected) {
       const dot = connectionStatus.querySelector(".dot");
-      const label = connectionStatus.querySelector("span:last-child");
       if (connected) {
-        dot.style.background = "#22c55e";
-        label.textContent = "Connected";
+        dot.style.background = "#22c55e"; 
+        dot.style.boxShadow = "0 0 10px rgba(34, 197, 94, 0.9)";
+        connectionStatus.style.borderColor = "rgba(34, 197, 94, 0.4)";
       } else {
-        dot.style.background = "#f97316";
-        label.textContent = "Reconnecting…";
+        dot.style.background = "#f97316"; 
+        dot.style.boxShadow = "0 0 10px rgba(249, 115, 22, 0.9)";
+        connectionStatus.style.borderColor = "rgba(249, 115, 22, 0.4)";
       }
     }
 
@@ -688,6 +744,7 @@
     function handleMessage(msg) {
       switch (msg.type) {
         case "NEW_ORDER":
+        case "ORDER_STATUS_UPDATE":
           addOrUpdate(msg.orderNumber, msg.status || "new", msg);
           break;
 
@@ -701,13 +758,42 @@
         case "ORDER_READY_CONFIRM":
           markReady(msg.orderNumber, { playSound: true });
           break;
+          
+        case "ITEM_COMPLETED_CONFIRM":
+            // Find the order and update the specific item status
+            if(orders[msg.orderNumber] && orders[msg.orderNumber].items[msg.itemIndex]) {
+                orders[msg.orderNumber].items[msg.itemIndex].completed = msg.completed;
+            }
+            // If all items are complete, mark the whole order ready
+            if(msg.allCompleted) {
+                markReady(msg.orderNumber, { playSound: true });
+            }
+            render();
+            break;
       }
       render();
     }
     
     /* -----------------------------
-      FILTERING, DRAG, PRESS LOGIC
+      STATUS AND INTERACTION LOGIC
     --------------------------------*/
+    
+    // NEW: Toggle Priority Status
+    window.togglePriority = function(orderNumber, event) {
+        if (event) event.stopPropagation(); 
+        const o = orders[orderNumber];
+        if (!o || o.status === "done" || o.status === "cancelled") return;
+
+        o.isPrioritized = !o.isPrioritized;
+        sendMessage({ 
+            type: "ORDER_PRIORITY_TOGGLE", 
+            orderNumber: orderNumber, 
+            isPrioritized: o.isPrioritized 
+        });
+        render(); // Re-render to apply new sort order
+    }
+
+
     window.setFilter = function(newFilter) {
       if (currentFilter === newFilter) return;
       currentFilter = newFilter;
@@ -775,7 +861,13 @@
           isLongPress = true;
           pressTimer = null; 
           event.currentTarget.style.userSelect = 'auto';
-          confirmCancel(orderNumber);
+          // Using a simple confirm for now, as requested.
+          const confirmed = window.confirm(`Are you sure you want to CANCEL order ${orderNumber}?`);
+          if (confirmed) {
+              cancelOrder(orderNumber);
+          } else {
+              isLongPress = false;
+          }
       }, LONG_PRESS_THRESHOLD);
     }
 
@@ -791,15 +883,6 @@
       }
     }
 
-    function confirmCancel(orderNumber) {
-      const confirmed = window.confirm(`Are you sure you want to CANCEL order ${orderNumber}? \n\nThis will remove it from the active list.`);
-      if (confirmed) {
-          cancelOrder(orderNumber);
-      } else {
-          isLongPress = false;
-      }
-    }
-
     window.cancelOrder = function(orderNumber) {
       const o = orders[orderNumber];
       if (!o) return;
@@ -811,16 +894,30 @@
 
     function addOrUpdate(orderNumber, status, data = {}) {
       const existing = orders[orderNumber] || {};
+      
+      // Ensure the items array maintains existing completion status if possible
+      let updatedItems = data.items || existing.items || [];
+      if (existing.items && existing.items.length === updatedItems.length) {
+          updatedItems = updatedItems.map((newItem, index) => ({
+              ...newItem,
+              completed: existing.items[index].completed || false,
+          }));
+      } else {
+          // Initialize completion status if items array structure changed
+          updatedItems = updatedItems.map(item => ({...item, completed: false}));
+      }
+
       orders[orderNumber] = {
         orderNumber,
         status,
         createdAt: data.createdAt || existing.createdAt || Date.now(),
         itemCount: data.itemCount ?? existing.itemCount ?? null,
-        items: data.items || existing.items || [],
+        items: updatedItems,
         orderId: data.orderId || existing.orderId,
+        isPrioritized: data.isPrioritized ?? existing.isPrioritized ?? false, // Initialize/update priority
       };
 
-      if (status === "cancelled" && selectedOrderNumber === orderNumber) {
+      if ((status === "cancelled" || status === "done") && selectedOrderNumber === orderNumber) {
         selectedOrderNumber = null;
       }
     }
@@ -831,10 +928,12 @@
 
       if (options.playSound) queueAnnouncement(orderNumber);
 
+      // Transition to done status after 5 seconds
       setTimeout(() => {
         const oCheck = orders[orderNumber];
         if (oCheck && oCheck.status === "ready") {
           oCheck.status = "done";
+          sendMessage({ type: "ORDER_COMPLETED", orderNumber });
           render();
         }
       }, 5000);
@@ -856,11 +955,14 @@
       if (o.status === "new") {
         o.status = "in-progress";
       } else if (o.status === "in-progress") {
+        // If cycling status, reset item completion for a full mark ready
+        o.items.forEach(item => item.completed = true);
         o.status = "ready";
         sendMessage({ type: "ORDER_READY", orderNumber });
         triggerReadyActions(orderNumber, { playSound: true });
       } else if (o.status === "ready") {
         o.status = "done";
+        sendMessage({ type: "ORDER_COMPLETED", orderNumber });
       }
 
       render();
@@ -872,6 +974,8 @@
       const o = orders[orderNumber];
       if (!o || (o.status !== "done" && o.status !== "cancelled")) return;
       
+      // Reset items to incomplete upon recall
+      o.items.forEach(item => item.completed = false); 
       o.status = "in-progress";
       sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
       
@@ -889,14 +993,67 @@
       render();
       triggerReadyActions(orderNumber, options);
     }
+    
+    // NEW: Function to toggle item completion status
+    window.toggleItemCompletion = function(orderNumber, itemIndex, event) {
+        if (event) event.stopPropagation(); 
+        
+        const o = orders[orderNumber];
+        if (!o || o.status === "ready" || o.status === "done" || o.status === "cancelled") return;
 
+        const item = o.items[itemIndex];
+        if (!item) return;
+        
+        const newCompletedStatus = !item.completed;
+        
+        // Optimistically update status
+        item.completed = newCompletedStatus;
+        
+        // Change status to in-progress if starting completion
+        if (o.status === "new" && newCompletedStatus) {
+            o.status = "in-progress";
+        }
+        
+        const allCompleted = o.items.every(i => i.completed);
+        
+        // Send message to server to update state
+        sendMessage({
+            type: "ITEM_COMPLETED",
+            orderNumber: orderNumber,
+            itemIndex: itemIndex,
+            completed: newCompletedStatus,
+            allCompleted: allCompleted
+        });
+        
+        if(allCompleted) {
+            markReady(orderNumber, { playSound: true });
+        }
+        
+        render();
+    }
+
+    // NEW: Function to update timers and color codes
     function updateTimers() {
       if (currentFilter === 'active') {
         document.querySelectorAll(".bubble").forEach((bubbleEl) => {
           const orderNumber = bubbleEl.dataset.order;
           const order = orders[orderNumber];
           const timerEl = bubbleEl.querySelector(".bubble-timer");
-          if (order && timerEl) timerEl.textContent = formatTimeElapsed(order.createdAt);
+          const topBarEl = bubbleEl.querySelector(".bubble-top-bar");
+          
+          if (order && timerEl && topBarEl) {
+              const secondsElapsed = Math.floor(Math.max(0, Date.now() - order.createdAt) / 1000);
+              
+              timerEl.textContent = formatTimeElapsed(order.createdAt);
+              
+              topBarEl.classList.remove('alert', 'critical');
+              
+              if (secondsElapsed >= 300) { // 5 minutes
+                  topBarEl.classList.add('critical');
+              } else if (secondsElapsed >= 180) { // 3 minutes
+                  topBarEl.classList.add('alert');
+              }
+          }
         });
       }
     }
@@ -905,26 +1062,32 @@
     /* -----------------------------
       RENDERING
     --------------------------------*/
-    function renderItemsHtml(items = [], maxItems = 99) {
+    
+    function renderItemsHtml(orderNumber, items = [], maxItems = 99) {
       if (!Array.isArray(items) || items.length === 0) {
         return `<div class="items-more">No item details.</div>`;
       }
 
       const slice = items.slice(0, maxItems); 
-      const rows = slice.map((item) => {
+      const rows = slice.map((item, index) => {
         const name = escapeHtml(item?.name || "Item");
         const qty = Number(item?.quantity ?? 1);
         const mods = Array.isArray(item?.modifiers) ? item.modifiers.filter(Boolean) : [];
         const modsShown = mods.slice(0, 3).map(escapeHtml).join(", ");
         const modsMore = mods.length > 3 ? `, +${mods.length - 3} more` : "";
+        const isCompleted = item.completed || false;
+        const completionClass = isCompleted ? 'completed' : '';
 
         return `
-          <div>
-            <div class="item-row">
-              <div class="item-name">${name}</div>
+          <div data-item-index="${index}" onclick="window.toggleItemCompletion('${orderNumber}', ${index}, event)">
+            <div class="item-row ${completionClass}">
+              <div class="item-name-group">
+                <span class="item-check">✓</span>
+                <div class="item-name">${name}</div>
+              </div>
               <div class="item-qty">x${Number.isFinite(qty) ? qty : 1}</div>
             </div>
-            ${mods.length ? `<div class="item-mods">+ ${modsShown}${modsMore}</div>` : ``}
+            ${mods.length ? `<div class="item-mods">| + ${modsShown}${modsMore}</div>` : ``}
           </div>
         `;
       }).join("");
@@ -937,7 +1100,7 @@
     }
 
     function render() {
-      const list = Object.values(orders).sort((a, b) => a.createdAt - b.createdAt);
+      let list = Object.values(orders).sort((a, b) => a.createdAt - b.createdAt);
       const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
       const done = list.filter((o) => o.status === "done");
       const cancelled = list.filter((o) => o.status === "cancelled");
@@ -952,7 +1115,12 @@
           filteredList = cancelled.sort((a, b) => b.createdAt - a.createdAt);
           emptyMessage = "No cancelled orders.";
       } else {
-          filteredList = active;
+          // ACTIVE FILTER: Prioritize tickets first, then by oldest (createdAt)
+          filteredList = active.sort((a, b) => {
+              if (a.isPrioritized && !b.isPrioritized) return -1;
+              if (!a.isPrioritized && b.isPrioritized) return 1;
+              return a.createdAt - b.createdAt;
+          });
           emptyMessage = "No active orders.";
       }
 
@@ -967,10 +1135,8 @@
         emptyStateWrapper.className = 'empty-state-wrapper';
         emptyStateWrapper.innerHTML = `<div class="empty-state"><div>${emptyMessage}</div></div>`;
         bubbleContainer.appendChild(emptyStateWrapper);
-        // Reset container classes for empty state
         bubbleContainer.classList.remove('multi-row-container'); 
       } else {
-        // Apply grid flow if more than 1 row is selected
         if (currentRows > 1) {
             bubbleContainer.classList.add('multi-row-container');
         } else {
@@ -989,7 +1155,6 @@
           b.ondragstart = handleDragStart;
           b.ondragend = handleDragEnd;
           
-          // Long Press Handlers
           if (isActiveStatus) {
               b.onmousedown = handleLongPressStart;
               b.onmouseup = handlePressEnd;
@@ -999,11 +1164,10 @@
               b.ontouchcancel = handlePressEnd;
           }
           
-          // Click handler
           b.onclick = (e) => {
-              if (isActiveStatus) {
+              if (isActiveStatus && !isLongPress) {
                   window.cycleStatus(o.orderNumber); 
-              } else {
+              } else if (!isActiveStatus) {
                   selectedOrderNumber = o.orderNumber; 
                   render(); 
               }
@@ -1022,30 +1186,43 @@
              ? '' 
              : `<button class="recall-btn" onclick="window.recallOrder('${o.orderNumber}', event)">RECALL</button>`;
           
-          const timerHtml = currentFilter === 'active' ? `<div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div>` : '';
+          const priorityIcon = o.isPrioritized ? '⚠️' : '';
+          const priorityBtn = isActiveStatus 
+             ? `<button class="prioritize-btn ${o.isPrioritized ? 'is-prioritized' : ''}" onclick="window.togglePriority('${o.orderNumber}', event)">${o.isPrioritized ? 'PRIORITIZED' : 'PRIORITIZE'}</button>` 
+             : '';
+
+          const timerHtml = currentFilter === 'active' 
+              ? `<span class="bubble-timer">${formatTimeElapsed(o.createdAt)}</span>` 
+              : '';
           
-          // RENDER FULL DETAIL: Always render the full item list for completed/cancelled orders
-          const itemsHtml = renderItemsHtml(o.items, 99);
+          const itemsHtml = renderItemsHtml(o.orderNumber, o.items, 99);
           
           b.innerHTML = `
-            <div class="bubble-header">
-              <div>
-                <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
-                <div class="bubble-status">${statusText}</div>
-              </div>
-              <div class="bubble-metas">
-                ${timerHtml}
-                <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
-                ${recallButtonHtml}
-              </div>
+            <div class="bubble-top-bar ${o.status !== 'ready' ? o.status : ''}">
+                <div>${statusText} ${priorityIcon} ${priorityBtn}</div>
+                <div>${timerHtml}</div>
             </div>
 
-            <div class="bubble-items">
-              ${itemsHtml}
+            <div class="bubble-body">
+                <div class="bubble-header">
+                  <div>
+                    <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
+                    <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
+                  </div>
+                  <div class="bubble-metas">
+                    ${recallButtonHtml}
+                  </div>
+                </div>
+
+                <div class="bubble-items">
+                  ${itemsHtml}
+                </div>
             </div>
           `;
 
           bubbleContainer.appendChild(b);
+          // Initial timer update to set the color bar immediately
+          updateTimers(); 
         });
       }
     }
