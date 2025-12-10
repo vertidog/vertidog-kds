@@ -47,12 +47,6 @@
       z-index: 10;
       gap: 1rem;
       user-select: none;
-      
-      /* FINAL FIX: Use fixed position relative to the viewport */
-      position: fixed; 
-      top: 0; 
-      left: 0; 
-      width: 100%;
     }
     header .title {
       display: flex;
@@ -108,25 +102,26 @@
       box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
     }
 
-    /* Connection Status Pill (Icon Only) */
+    /* Connection Status Pill */
     header .status-pill {
-      padding: 0.5rem 0.5rem; /* Make it square/round and small */
+      padding: 0.35rem 0.8rem;
       border-radius: 999px;
+      font-size: 0.9rem;
       display: flex;
       align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: 1px solid rgba(148, 163, 184, 0.4); /* Subtle border for visibility */
+      gap: 0.5rem;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #bbf7d0;
       flex: 0 0 auto;
-      transition: all 0.4s;
+      white-space: nowrap;
     }
     header .dot {
-      width: 0.7rem; /* Slightly larger dot */
-      height: 0.7rem;
+      width: 0.55rem;
+      height: 0.55rem;
       border-radius: 999px;
       background: #22c55e;
       box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
-      transition: all 0.4s;
     }
 
     /* Options Button */
@@ -147,11 +142,14 @@
     --------------------------------*/
     main {
       flex: 1;
-      /* Adjust padding to account for fixed header (approx 70px) */
-      padding: 4.5rem 0.9rem 0.9rem 0.9rem;
+      padding: 0.9rem;
+      display: flex;
+      flex-direction: row; 
+      gap: 0.9rem;
       overflow-x: scroll; 
       overflow-y: hidden; 
       min-height: 220px;
+      padding-bottom: 0.9rem;
       -webkit-overflow-scrolling: touch; 
     }
     
@@ -165,27 +163,27 @@
       position: relative;
       flex: 0 0 var(--card-width);
       height: 100%; 
+      
+      /* Multi-row Mode: Grid styling preparation */
       align-self: flex-start;
-      /* No margin calc needed, handled by flex gap */
+      margin-bottom: calc(var(--grid-rows) * 0.9rem); 
     }
 
-    /* Multi-row container uses Flexbox to wrap items into rows (Horizontal first) */
+    /* Apply Grid container properties when multi-row is active */
     .multi-row-container {
-        display: flex;
-        flex-wrap: wrap; 
-        flex-direction: column; /* Crucial: This makes items fill rows (vertically) first, then wrap to the right (horizontally) */
+        display: grid;
+        grid-auto-flow: column; /* Flow columns first (horizontal scrolling) */
+        grid-template-rows: repeat(var(--grid-rows), 1fr); /* Define number of rows */
         gap: 0.9rem;
-        height: 100%; 
-        width: max-content; /* Use max-content for better browser compatibility in horizontal flow */
+        height: 100%;
+        width: max-content; 
     }
 
     /* Override flex for multi-row items */
     .multi-row-container .bubble {
         flex: unset;
         width: var(--card-width);
-        /* Calculate item height to fit exactly in the number of rows, accounting for gaps */
-        /* Formula: (100% - (N * gap) + gap) / N */
-        height: calc((100% - (var(--grid-rows) * 0.9rem) + 0.9rem) / var(--grid-rows)); 
+        height: 100%;
         margin-bottom: 0;
     }
     
@@ -212,7 +210,12 @@
       flex: 1;
     }
 
-    /* DRAG STYLES */
+    /* DRAG STYLES (Kept for completeness, though less relevant in single row) */
+    .drag-over-active {
+        /* outline: 4px dashed var(--accent); */
+        background-color: var(--drag-hover-color);
+        border-radius: var(--radius);
+    }
     .dragging { opacity: 0.4; }
 
 
@@ -360,19 +363,21 @@
 
     /* Status Specific Styles */
     .bubble.new {
+      background: var(--card-bg);
       border-color: var(--new);
-      box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0,0,0,0.45);
     }
     .bubble.new .bubble-status { background: var(--new); color: #fff; }
     .bubble.in-progress {
+      background: var(--card-bg);
       border-color: var(--progress);
-      box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0,0,0,0.45);
     }
     .bubble.in-progress .bubble-status { background: var(--progress); color: #fff; }
     .bubble.ready {
       background: radial-gradient(circle at center, rgba(34, 197, 94, 0.22), var(--card-bg) 70%);
       border-color: var(--ready);
-      box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0,0,0,0.45);
     }
     .bubble.ready .bubble-status { background: var(--ready); color: var(--card-bg); }
     .bubble.done {
@@ -470,6 +475,7 @@
     <div style="display: flex; gap: 0.5rem; align-items: center;">
         <div class="status-pill" id="connection-status">
             <span class="dot"></span>
+            <span>Connected</span>
         </div>
         <button class="options-btn" onclick="toggleOptionsModal()">⚙️</button>
     </div>
@@ -644,14 +650,13 @@
     --------------------------------*/
     function setConnectionState(connected) {
       const dot = connectionStatus.querySelector(".dot");
+      const label = connectionStatus.querySelector("span:last-child");
       if (connected) {
-        dot.style.background = "#22c55e"; // Green
-        dot.style.boxShadow = "0 0 10px rgba(34, 197, 94, 0.9)";
-        connectionStatus.style.borderColor = "rgba(34, 197, 94, 0.4)";
+        dot.style.background = "#22c55e";
+        label.textContent = "Connected";
       } else {
-        dot.style.background = "#f97316"; // Orange/Yellow
-        dot.style.boxShadow = "0 0 10px rgba(249, 115, 22, 0.9)";
-        connectionStatus.style.borderColor = "rgba(249, 115, 22, 0.4)";
+        dot.style.background = "#f97316";
+        label.textContent = "Reconnecting…";
       }
     }
 
@@ -919,7 +924,7 @@
               <div class="item-name">${name}</div>
               <div class="item-qty">x${Number.isFinite(qty) ? qty : 1}</div>
             </div>
-            ${mods.length ? `<div class="item-mods">| + ${modsShown}${modsMore}</div>` : ``}
+            ${mods.length ? `<div class="item-mods">+ ${modsShown}${modsMore}</div>` : ``}
           </div>
         `;
       }).join("");
@@ -965,7 +970,7 @@
         // Reset container classes for empty state
         bubbleContainer.classList.remove('multi-row-container'); 
       } else {
-        // Apply multi-row styling class if needed
+        // Apply grid flow if more than 1 row is selected
         if (currentRows > 1) {
             bubbleContainer.classList.add('multi-row-container');
         } else {
@@ -1019,7 +1024,7 @@
           
           const timerHtml = currentFilter === 'active' ? `<div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div>` : '';
           
-          // RENDER FULL DETAIL
+          // RENDER FULL DETAIL: Always render the full item list for completed/cancelled orders
           const itemsHtml = renderItemsHtml(o.items, 99);
           
           b.innerHTML = `
