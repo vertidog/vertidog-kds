@@ -384,8 +384,14 @@
         flex: 1;
         min-width: 0;
     }
+    .item-name-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+      min-width: 0;
+    }
     .item-name {
-      font-size: 1.15rem; 
+      font-size: 1.15rem;
       font-weight: 800;
       color: var(--text);
       overflow: hidden;
@@ -393,6 +399,17 @@
       white-space: nowrap;
       min-width: 0;
       transition: color 0.2s;
+    }
+    .item-variant {
+      font-size: 0.98rem;
+      color: var(--muted);
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .item-row.completed .item-variant {
+        color: var(--muted);
     }
     .item-qty {
       font-size: 1.05rem;
@@ -1082,10 +1099,11 @@
         return `<div class="items-more">No item details.</div>`;
       }
 
-      const slice = items.slice(0, maxItems); 
+      const slice = items.slice(0, maxItems);
       const rows = slice.map((item, index) => {
         const name = escapeHtml(item?.name || "Item");
         const qty = Number(item?.quantity ?? 1);
+        const variant = escapeHtml(item?.variationName || "");
         const mods = Array.isArray(item?.modifiers) ? item.modifiers.filter(Boolean) : [];
         const modsShown = mods.slice(0, 3).map(escapeHtml).join(", ");
         const modsMore = mods.length > 3 ? `, +${mods.length - 3} more` : "";
@@ -1097,7 +1115,10 @@
             <div class="item-row ${completionClass}">
               <div class="item-name-group">
                 <span class="item-check">✓</span>
-                <div class="item-name">${name}</div>
+                <div class="item-name-text">
+                  <div class="item-name">${name}</div>
+                  ${variant ? `<div class="item-variant">${variant}</div>` : ``}
+                </div>
               </div>
               <div class="item-qty">x${Number.isFinite(qty) ? qty : 1}</div>
             </div>
