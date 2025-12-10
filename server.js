@@ -254,25 +254,25 @@ app.post("/square/webhook", async (req, res) => {
     }
     // ---------- END ORDER NUMBER ASSIGNMENT ----------
 
+    // Capture existing state before processing the webhook
+    const existing = orders[orderId] || {};
+    const previousKdsStatus = existing.status; 
+    
     // ---------- ITEMS ----------
     let items = [];
     if (fullOrder && Array.isArray(fullOrder.line_items)) {
       items = fullOrder.line_items.map((li) => {
-        // --- NEW LOGIC: Extract the Variation Name ---
+        // --- LOGIC: Extract the Variation Name ---
         const baseName = li.name || "Item";
-        // Square stores the item type/flavor here, e.g., "Coke" or "Classic"
         const variationName = li.variation_name ? li.variation_name.trim() : null;
         
         let displayName = baseName;
         
-        // Combine base name and variation name if the variation is present 
-        // and provides new, useful information.
         if (variationName && variationName.toLowerCase() !== baseName.toLowerCase()) {
             displayName = `${baseName} - ${variationName}`;
         }
         
         return {
-          // Use the combined name for the kitchen ticket
           name: displayName, 
           quantity: toNumberQuantity(li.quantity || 1),
           modifiers: Array.isArray(li.modifiers)
@@ -280,9 +280,9 @@ app.post("/square/webhook", async (req, res) => {
             : [],
         };
       });
-    } else if (orders[orderId]?.items) {
+    } else if (existing.items) {
       // reuse items from previous event for same order
-      items = orders[orderId].items;
+      items = existing.items;
     }
 
     const itemCount = items.reduce(
@@ -291,32 +291,29 @@ app.post("/square/webhook", async (req, res) => {
     );
     const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
 
-    const existing = orders[orderId] || {};
     
-    // --- ULTIMATE KDS STATUS LOCK FIX ---
+    // --- ULTIMATE KDS STATUS LOCK FIX (Ensures KDS-set status is sticky) ---
     
-    let kdsStatus = existing.status || "new";
+    let kdsStatus = previousKdsStatus || "new";
     
-    // Rule 1: Cancellation is the only update that can override any KDS status.
+    // Rule 1: Square's CANCELED/CLOSED states always override, setting the KDS status to 'cancelled'.
     if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
         kdsStatus = "cancelled";
     }
     
-    // Rule 2 (THE CRITICAL PART): If the order already exists in our KDS memory 
-    // AND it has been touched (i.e., status is NOT 'new'), we NEVER override 
-    // the existing KDS status with a general Square update (like 'OPEN').
-    // This locks the order state based on kitchen action.
-    // We explicitly exclude 'cancelled' from this check, as Rule 1 handles it.
-    if (existing.status && existing.status !== 'new' && kdsStatus !== 'cancelled') {
-        kdsStatus = existing.status;
+    // Rule 2: If the order was NOT previously cancelled, and Square says it's OPEN, 
+    // but the KDS has marked it 'ready', we stick to 'ready'.
+    // NOTE: This prevents a completed KDS ticket from being reset by a generic 'OPEN' webhook.
+    else if (previousKdsStatus && previousKdsStatus !== 'new' && previousKdsStatus !== 'in-progress') {
+        kdsStatus = previousKdsStatus; // Stick to the existing KDS status (ready/cancelled)
     }
     
     // --- END ULTIMATE KDS STATUS LOCK FIX ---
 
     const merged = {
       orderId,
-      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6), // Final selection, preferring Square's
-      status: kdsStatus, // Use the determined status
+      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6), 
+      status: kdsStatus, // Use the determined locked status
       createdAt: existing.createdAt || Date.now(),
       itemCount,
       items,
@@ -327,17 +324,21 @@ app.post("/square/webhook", async (req, res) => {
 
     console.log("✅ Final KDS order object:", merged);
 
-    // --- FIX: Prevent re-broadcasting orders that are already marked done/cancelled by KDS ---
-    let shouldBroadcastWebhook = true;
-        
-    // If the KDS status hasn't changed, and it's settled on a non-active state, suppress the broadcast.
-    if (existing.status && merged.status === existing.status) {
-        if (merged.status === 'cancelled' || merged.status === 'ready') {
-             shouldBroadcastWebhook = false;
+    // --- FIX: Prevent re-broadcasting orders that are already marked done/cancelled ---
+    let statusChanged = merged.status !== previousKdsStatus;
+    let shouldBroadcast = true;
+    
+    // If we have an existing record (not a brand new order):
+    if (previousKdsStatus) { 
+        // If the status hasn't changed, AND the status is terminal (ready/cancelled), suppress the broadcast.
+        if (!statusChanged && (merged.status === 'cancelled' || merged.status === 'ready')) {
+            console.log(`❌ Suppressing webhook update for order ${merged.orderNumber}: Status locked to ${merged.status}.`);
+            shouldBroadcast = false;
         }
     }
+    // New orders (previousKdsStatus=undefined) or orders whose status changed (e.g., in-progress -> ready) will still broadcast.
 
-    if (shouldBroadcastWebhook) {
+    if (shouldBroadcast) {
         broadcast({
           type: "NEW_ORDER",
           ...merged,
