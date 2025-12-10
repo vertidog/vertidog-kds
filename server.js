@@ -190,7 +190,7 @@ wss.on("connection", (ws) => {
           JSON.stringify({
             type: "SYNC_STATE",
             // CRITICAL FIX 5: Send ALL orders on sync request
-            orders: Object.values(orders), // Ensures completed/cancelled orders are sent
+            orders: Object.values(orders), // Removed filter
           })
         );
       }
@@ -204,7 +204,7 @@ wss.on("connection", (ws) => {
     JSON.stringify({
       type: "SYNC_STATE",
       // CRITICAL FIX 5: Send ALL orders on initial connect
-      orders: Object.values(orders), // Ensures completed/cancelled orders are sent
+      orders: Object.values(orders), // Removed filter
     })
   );
 
@@ -331,6 +331,7 @@ app.post("/square/webhook", async (req, res) => {
     
     // Rule 2: If the order was previously marked 'ready' or 'cancelled' by the KDS, 
     // it STAYS that way, preventing the Square 'OPEN' webhook from resetting it.
+    // This is the core fix for the persistence issue.
     else if (previousKdsStatus && (previousKdsStatus === 'ready' || previousKdsStatus === 'cancelled')) {
         kdsStatus = previousKdsStatus; // Stick to the existing KDS status
     }
@@ -390,7 +391,7 @@ app.get("/test-order", (req, res) => {
     // ADDED: Large, complex order for dynamic sizing test, with descriptive names
     items: [
       { name: "VertiDog - Classic", quantity: 4, modifiers: ["Mustard", "Ketchup", "Grilled Onions", "No Relish"] },
-      { name: "Chili Cheese Fries", quantity: 2, modifiers: [\"Extra Chili\", "Side of Ranch", "No Jalapeños", "Heavy Cheese"] },
+      { name: "Chili Cheese Fries", quantity: 2, modifiers: ["Extra Chili", "Side of Ranch", "No Jalapeños", "Heavy Cheese"] },
       { name: "Large Soda - Coke", quantity: 3, modifiers: ["Two 20oz", "One 32oz"] },
       { name: "Large Soda - Sprite", quantity: 3, modifiers: [] },
       { name: "Double Bacon Burger", quantity: 3, modifiers: ["Medium Rare", "Add Avocado", "Extra Crispy Bacon", "Side of Mayo"] },
