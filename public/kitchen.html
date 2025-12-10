@@ -158,15 +158,13 @@
     main::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 6px; }
     main::-webkit-scrollbar-thumb:hover { background: #8e44ad; }
 
-    /* Single-row Mode (Default: --grid-rows: 1) */
+    /* Default (Single-row Mode: --grid-rows: 1) */
     .bubble {
       position: relative;
       flex: 0 0 var(--card-width);
       height: 100%; 
       
-      /* Multi-row Mode: Grid styling */
-      /* These properties dynamically shift the card flow when --grid-rows > 1 */
-      /* Order cards vertically first, then wrap horizontally */
+      /* Multi-row Mode: Grid styling preparation */
       align-self: flex-start;
       margin-bottom: calc(var(--grid-rows) * 0.9rem); 
     }
@@ -178,7 +176,6 @@
         grid-template-rows: repeat(var(--grid-rows), 1fr); /* Define number of rows */
         gap: 0.9rem;
         height: 100%;
-        /* Ensure the container stretches wide enough to contain all items */
         width: max-content; 
     }
 
@@ -213,8 +210,16 @@
       flex: 1;
     }
 
-    /* CARD STYLES (Rest of card styling remains the same) */
-    /* ... (CSS for bubble, bubble-status, bubble-header, bubble-items, etc.) ... */
+    /* DRAG STYLES (Kept for completeness, though less relevant in single row) */
+    .drag-over-active {
+        /* outline: 4px dashed var(--accent); */
+        background-color: var(--drag-hover-color);
+        border-radius: var(--radius);
+    }
+    .dragging { opacity: 0.4; }
+
+
+    /* CARD STYLES */
     .bubble {
       position: relative;
       border-radius: var(--radius);
@@ -228,6 +233,7 @@
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
+      background: var(--card-bg); /* Default background */
     }
     .bubble:active { transform: scale(0.99); cursor: grabbing; }
 
@@ -585,7 +591,7 @@
 
 
     /* -----------------------------
-      TTS SETUP (Unchanged)
+      TTS SETUP
     --------------------------------*/
     function loadVoices() {
       if (!("speechSynthesis" in window)) return;
@@ -640,7 +646,7 @@
     }
 
     /* -----------------------------
-      WEBSOCKET & MESSAGING (Unchanged)
+      WEBSOCKET & MESSAGING
     --------------------------------*/
     function setConnectionState(connected) {
       const dot = connectionStatus.querySelector(".dot");
@@ -700,7 +706,7 @@
     }
     
     /* -----------------------------
-      FILTERING, DRAG, PRESS LOGIC (Largely Unchanged)
+      FILTERING, DRAG, PRESS LOGIC
     --------------------------------*/
     window.setFilter = function(newFilter) {
       if (currentFilter === newFilter) return;
@@ -897,7 +903,7 @@
     setInterval(updateTimers, 1000);
     
     /* -----------------------------
-      RENDERING (Updated for Dynamic Row Layout)
+      RENDERING
     --------------------------------*/
     function renderItemsHtml(items = [], maxItems = 99) {
       if (!Array.isArray(items) || items.length === 0) {
@@ -964,7 +970,7 @@
         // Reset container classes for empty state
         bubbleContainer.classList.remove('multi-row-container'); 
       } else {
-        // Prepare container for multi-row view if needed
+        // Apply grid flow if more than 1 row is selected
         if (currentRows > 1) {
             bubbleContainer.classList.add('multi-row-container');
         } else {
@@ -1018,9 +1024,8 @@
           
           const timerHtml = currentFilter === 'active' ? `<div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div>` : '';
           
-          const itemsHtml = (currentFilter === 'done' || currentFilter === 'cancelled') 
-            ? `<div class="items-more">${itemCountText}</div>` 
-            : renderItemsHtml(o.items, 99);
+          // RENDER FULL DETAIL: Always render the full item list for completed/cancelled orders
+          const itemsHtml = renderItemsHtml(o.items, 99);
           
           b.innerHTML = `
             <div class="bubble-header">
