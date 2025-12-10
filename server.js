@@ -431,7 +431,7 @@ app.post("/square/webhook", async (req, res) => {
     let kdsStatus = existing.status || "new";
     
     // Rule 1: Cancellation is the only update that can override any KDS status.
-    if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
+    if (stateFromSquare === "canceled" || stateFromSquare === "cancelled" || stateFromSquare === "closed") {
         kdsStatus = "cancelled";
     }
     
