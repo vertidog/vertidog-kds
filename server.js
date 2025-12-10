@@ -391,6 +391,7 @@ app.post("/square/webhook", async (req, res) => {
       items = fullOrder.line_items.map((li) => ({
         name: li.name || "Item",
         quantity: toNumberQuantity(li.quantity || 1),
+        variationName: li.variation_name || null,
         modifiers: Array.isArray(li.modifiers)
           ? li.modifiers.map((m) => m.name).filter(Boolean)
           : [],
