@@ -163,6 +163,24 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "kitchen.html"));
 });
 
+// Lightweight health/status endpoint for uptime monitoring
+app.get('/health', (req, res) => {
+    const allOrders = Object.values(orders);
+    const counts = allOrders.reduce((acc, order) => {
+        const status = order.status;
+        if (status === 'ready') acc.ready++;
+        else if (status === 'cancelled') acc.cancelled++;
+        else acc.active++;
+        return acc;
+    }, { active: 0, ready: 0, cancelled: 0 });
+
+    res.json({
+        status: 'ok',
+        uptimeSeconds: Math.round(process.uptime()),
+        orders: counts,
+    });
+});
+
 // Middleware for Square Webhooks (raw body is required for signature verification)
 // Use bodyParser.json() for other routes
 app.use(bodyParser.json());
