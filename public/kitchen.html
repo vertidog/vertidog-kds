@@ -19,7 +19,7 @@
       --drag-hover-color: rgba(168, 85, 247, 0.22);
       --radius: 16px;
       
-      /* New Time Alert Colors */
+      /* Time Alert Colors (3 mins / 5 mins) */
       --time-alert: #f59e0b;   /* Amber (3 mins) */
       --time-critical: #ef4444; /* Red (5 mins) */
       --time-default: #1f2937;  /* Dark text color for timer */
@@ -41,7 +41,7 @@
       flex-direction: column;
     }
 
-    /* HEADER - Background remains dark, text becomes light */
+    /* HEADER - Fixed to top, background remains dark */
     header {
       padding: 0.9rem 1.15rem;
       display: flex;
@@ -77,7 +77,7 @@
     }
     header .subtitle {
       font-size: 0.95rem; 
-      color: transparent; /* Remove text, but keep space */
+      color: transparent; /* Text removed as requested */
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -151,12 +151,16 @@
       MAIN SCROLLER & CARD LAYOUT
     --------------------------------*/
     main {
-      flex: 1;
+      flex: 1; /* Make main take up all remaining vertical space */
       padding: 4.5rem 0.9rem 0.9rem 0.9rem;
       overflow-x: scroll; 
       overflow-y: hidden; 
       min-height: 220px;
       -webkit-overflow-scrolling: touch; 
+      
+      /* FIX: Default to horizontal flex layout for 1-row scrolling */
+      display: flex; 
+      gap: 0.9rem;
     }
     
     main::-webkit-scrollbar { height: 12px; }
@@ -164,6 +168,7 @@
     main::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 6px; }
     main::-webkit-scrollbar-thumb:hover { background: #8e44ad; }
 
+    /* Fix: Bubble only takes fixed width and full height of main */
     .bubble {
       position: relative;
       flex: 0 0 var(--card-width);
@@ -175,16 +180,17 @@
         display: flex;
         flex-wrap: wrap; 
         flex-direction: column; 
-        gap: 0.9rem;
+        /* gap: 0.9rem; -- Removed here, added to main, vertical gap handled by margin-bottom */
         height: 100%; 
         width: max-content; 
     }
 
+    /* Fix: Re-add vertical margin when in multi-row view */
     .multi-row-container .bubble {
         flex: unset;
         width: var(--card-width);
         height: calc((100% - (var(--grid-rows) * 0.9rem) + 0.9rem) / var(--grid-rows)); 
-        margin-bottom: 0;
+        margin-bottom: 0.9rem; 
     }
     
     .empty-state-wrapper {
@@ -222,11 +228,11 @@
       transition: transform 0.1s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out, opacity 0.3s ease-out;
       user-select: none;
       touch-action: manipulation;
-      padding: 0; /* Remove padding to contain header/body */
+      padding: 0; 
       display: flex;
       flex-direction: column;
       background: var(--card-bg); 
-      color: var(--text); /* Set text color for the whole card */
+      color: var(--text); 
     }
     .bubble:active { transform: scale(0.99); cursor: grabbing; }
 
@@ -236,7 +242,7 @@
       transform: scale(1.01);
     }
     
-    /* NEW: Card Header for Time Coloring (Top Bar) */
+    /* Card Header for Time Coloring (Top Bar) */
     .bubble-top-bar {
         background: var(--new); /* Default blue, will change based on time */
         color: white;
@@ -437,7 +443,6 @@
       border-color: var(--new);
       box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
     }
-    /* .bubble.new .bubble-status { background: var(--new); color: #fff; } (Status moved to top-bar) */
     .bubble.in-progress {
       border-color: var(--progress);
       box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
@@ -611,7 +616,7 @@
       return `${seconds}s`;
     }
     
-    // --- Options Modal Logic (UNTOUCHED) ---
+    // --- Options Modal Logic ---
 
     window.toggleOptionsModal = function() {
         optionsModal.classList.toggle('show');
@@ -644,7 +649,7 @@
 
 
     /* -----------------------------
-      TTS SETUP (UNTOUCHED)
+      TTS SETUP 
     --------------------------------*/
 
     function loadVoices() {
@@ -700,7 +705,7 @@
     }
 
     /* -----------------------------
-      WEBSOCKET & MESSAGING (UNTOUCHED)
+      WEBSOCKET & MESSAGING 
     --------------------------------*/
 
     function setConnectionState(connected) {
@@ -766,7 +771,14 @@
             }
             // If all items are complete, mark the whole order ready
             if(msg.allCompleted) {
-                markReady(msg.orderNumber, { playSound: true });
+                markReady(msg.orderNumber, { playSound: false }); // Don't double-play sound if order ready was handled on server
+            }
+            render();
+            break;
+            
+        case "ORDER_PRIORITY_TOGGLE":
+            if (orders[msg.orderNumber]) {
+                orders[msg.orderNumber].isPrioritized = msg.isPrioritized;
             }
             render();
             break;
@@ -778,7 +790,7 @@
       STATUS AND INTERACTION LOGIC
     --------------------------------*/
     
-    // NEW: Toggle Priority Status
+    // Toggle Priority Status
     window.togglePriority = function(orderNumber, event) {
         if (event) event.stopPropagation(); 
         const o = orders[orderNumber];
@@ -861,7 +873,7 @@
           isLongPress = true;
           pressTimer = null; 
           event.currentTarget.style.userSelect = 'auto';
-          // Using a simple confirm for now, as requested.
+          // Using a simple confirm as requested in previous turn
           const confirmed = window.confirm(`Are you sure you want to CANCEL order ${orderNumber}?`);
           if (confirmed) {
               cancelOrder(orderNumber);
@@ -994,7 +1006,7 @@
       triggerReadyActions(orderNumber, options);
     }
     
-    // NEW: Function to toggle item completion status
+    // Function to toggle item completion status
     window.toggleItemCompletion = function(orderNumber, itemIndex, event) {
         if (event) event.stopPropagation(); 
         
@@ -1032,7 +1044,7 @@
         render();
     }
 
-    // NEW: Function to update timers and color codes
+    // Function to update timers and color codes
     function updateTimers() {
       if (currentFilter === 'active') {
         document.querySelectorAll(".bubble").forEach((bubbleEl) => {
@@ -1048,10 +1060,12 @@
               
               topBarEl.classList.remove('alert', 'critical');
               
-              if (secondsElapsed >= 300) { // 5 minutes
-                  topBarEl.classList.add('critical');
-              } else if (secondsElapsed >= 180) { // 3 minutes
-                  topBarEl.classList.add('alert');
+              if (order.status !== 'ready') {
+                if (secondsElapsed >= 300) { // 5 minutes
+                    topBarEl.classList.add('critical');
+                } else if (secondsElapsed >= 180) { // 3 minutes
+                    topBarEl.classList.add('alert');
+                }
               }
           }
         });
@@ -1137,6 +1151,7 @@
         bubbleContainer.appendChild(emptyStateWrapper);
         bubbleContainer.classList.remove('multi-row-container'); 
       } else {
+        // Apply multi-row class to the container when needed
         if (currentRows > 1) {
             bubbleContainer.classList.add('multi-row-container');
         } else {
