@@ -348,40 +348,6 @@
       font-weight: 650;
     }
 
-    .bubble-dining {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      background: rgba(59, 130, 246, 0.1);
-      color: var(--new);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      padding: 0.35rem 0.6rem;
-      border-radius: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      width: fit-content;
-    }
-
-    .bubble-note {
-      background: rgba(148, 163, 184, 0.15);
-      border-left: 4px solid var(--accent);
-      padding: 0.65rem 0.8rem;
-      border-radius: 10px;
-      font-weight: 650;
-      color: var(--text);
-      line-height: 1.4;
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-      word-break: break-word;
-    }
-
-    .bubble-note .note-icon {
-      color: var(--accent);
-      font-size: 1.2rem;
-    }
-
     .bubble-items {
       flex: 1;
       border-top: 1px solid rgba(148, 163, 184, 0.35);
@@ -1270,14 +1236,12 @@
              ? `<button class="prioritize-btn ${o.isPrioritized ? 'is-prioritized' : ''}" onclick="window.togglePriority('${o.orderNumber}', event)">${o.isPrioritized ? 'PRIORITIZED' : 'PRIORITIZE'}</button>`
              : '';
 
-          const timerHtml = currentFilter === 'active'
-              ? `<span class="bubble-timer">${formatTimeElapsed(o.createdAt)}</span>`
+          const timerHtml = currentFilter === 'active' 
+              ? `<span class="bubble-timer">${formatTimeElapsed(o.createdAt)}</span>` 
               : '';
-
+          
           const itemsHtml = renderItemsHtml(o.orderNumber, o.items, 99);
-          const diningHtml = o.diningOption ? `<div class="bubble-dining">🍽️ ${escapeHtml(o.diningOption)}</div>` : '';
-          const noteHtml = o.customerNote ? `<div class="bubble-note"><span class="note-icon">📝</span><span>${escapeHtml(o.customerNote)}</span></div>` : '';
-
+          
           b.innerHTML = `
             <div class="bubble-top-bar ${o.status !== 'ready' ? o.status : ''}">
                 <div>${statusText} ${priorityIcon} ${priorityBtn}</div>
@@ -1294,9 +1258,6 @@
                     ${recallButtonHtml}
                   </div>
                 </div>
-
-                ${diningHtml}
-                ${noteHtml}
 
                 <div class="bubble-items">
                   ${itemsHtml}
