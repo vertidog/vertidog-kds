@@ -27,1192 +27,576 @@
       /* User configurable: Controls how many rows the KDS uses */
       --grid-rows: 1; 
       /* Fixed width for a card when in a single row or narrow grid */
-      --card-width: 420px; 
+      --card-width: 400px;
     }
 
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    /* -----------------------------
+      GENERAL STYLES
+    --------------------------------*/
     body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: radial-gradient(circle at top, #111827 0, #020617 50%, #000 100%);
+      background-color: var(--bg);
       color: var(--text);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* HEADER - Fixed to top, background remains dark */
-    header {
-      padding: 0.9rem 1.15rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(15, 23, 42, 0.9);
-      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
-      backdrop-filter: blur(10px);
-      z-index: 10;
-      gap: 1rem;
-      user-select: none;
-      
-      position: fixed; 
-      top: 0; 
-      left: 0; 
-      width: 100%;
-      color: #fff; /* Ensure header text is white */
-    }
-    header .title {
-      display: flex;
-      flex-direction: column;
-      gap: 0.15rem;
-      min-width: 0;
-    }
-    header h1 {
-      font-size: 1.2rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       margin: 0;
-      color: var(--accent);
-      line-height: 1.1;
-      white-space: nowrap;
-    }
-    header .subtitle {
-      font-size: 0.95rem; 
-      color: transparent; /* Text removed as requested */
-      white-space: nowrap;
+      padding: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
     }
 
-    /* STYLES FOR HEADER PILLS (Tabs) */
-    header .status-tabs {
-      display: flex;
-      gap: 0.6rem;
-      flex: 1;
-      min-width: 0;
-    }
-    header .tab-pill {
-      padding: 0.3rem 0.8rem;
-      border-radius: 999px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      cursor: pointer;
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      color: var(--muted);
-      white-space: nowrap;
-      transition: all 0.2s ease;
-    }
-    header .tab-pill:hover {
-      border-color: var(--accent);
-      color: #fff;
-    }
-    header .active-tab {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-      box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
+    /* -----------------------------
+      KDS GRID LAYOUT
+    --------------------------------*/
+    .kds-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      height: 100vh;
+      overflow: hidden;
     }
 
-    /* Connection Status Pill (Icon Only) */
-    header .status-pill {
-      padding: 0.5rem 0.5rem; 
-      border-radius: 999px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: 1px solid rgba(148, 163, 184, 0.4); 
-      flex: 0 0 auto;
-      transition: all 0.4s;
+    .kds-tabs {
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 16px;
+        padding: 10px 20px;
+        background-color: #1f2937; /* Dark header bar */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
     }
-    header .dot {
-      width: 0.7rem; 
-      height: 0.7rem;
-      border-radius: 999px;
-      background: #22c55e;
-      box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
-      transition: all 0.4s;
-    }
-
-    /* Options Button */
-    .options-btn {
+    
+    .kds-tab {
         background: none;
         border: none;
         color: var(--muted);
-        font-size: 1.6rem;
+        font-size: 1.2rem;
+        font-weight: bold;
+        padding: 8px 15px;
         cursor: pointer;
-        transition: color 0.2s;
-        padding: 0 0.5rem;
-        line-height: 1;
+        border-radius: 8px;
+        transition: color 0.2s, background-color 0.2s;
     }
-    .options-btn:hover { color: var(--accent); }
     
+    .kds-tab.active {
+        color: var(--card-bg); /* White text for active tab */
+        background-color: var(--new); /* Blue highlight for active tab */
+    }
+
+    .kds-tab-content {
+      flex-grow: 1;
+      overflow: hidden;
+      padding: 10px;
+    }
+
+    .bubble-grid {
+      display: grid;
+      gap: 10px;
+      /* Default grid setup for active tickets */
+      grid-template-columns: repeat(auto-fill, minmax(var(--card-width), 1fr));
+      align-items: start;
+      align-content: start;
+      padding: 5px;
+      height: calc(100vh - 70px); /* Adjust height based on header height */
+      overflow-y: auto;
+    }
+
     /* -----------------------------
-      MAIN SCROLLER & CARD LAYOUT
+      TICKET (BUBBLE) STYLES
     --------------------------------*/
-    main {
-      flex: 1; /* Make main take up all remaining vertical space */
-      padding: 4.5rem 0.9rem 0.9rem 0.9rem;
-      overflow-x: scroll; 
-      overflow-y: hidden; 
-      min-height: 220px;
-      -webkit-overflow-scrolling: touch; 
-      
-      /* FIX: Default to horizontal flex layout for 1-row scrolling */
-      display: flex; 
-      gap: 0.9rem;
-    }
-    
-    main::-webkit-scrollbar { height: 12px; }
-    main::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.7); border-radius: 6px; }
-    main::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 6px; }
-    main::-webkit-scrollbar-thumb:hover { background: #8e44ad; }
-
-    /* Fix: Bubble only takes fixed width and full height of main */
-    .bubble {
-      position: relative;
-      flex: 0 0 var(--card-width);
-      height: 100%; 
-      align-self: flex-start;
-    }
-
-    .multi-row-container {
-        display: flex;
-        flex-wrap: wrap; 
-        flex-direction: column; 
-        /* gap: 0.9rem; -- Removed here, added to main, vertical gap handled by margin-bottom */
-        height: 100%; 
-        width: max-content; 
-    }
-
-    /* Fix: Re-add vertical margin when in multi-row view */
-    .multi-row-container .bubble {
-        flex: unset;
-        width: var(--card-width);
-        height: calc((100% - (var(--grid-rows) * 0.9rem) + 0.9rem) / var(--grid-rows)); 
-        margin-bottom: 0.9rem; 
-    }
-    
-    .empty-state-wrapper {
-        flex: 0 0 100%; 
-        height: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .empty-state {
-      width: 100%;
-      height: 100%;
-      border: 1px dashed rgba(148, 163, 184, 0.35);
+    .order-bubble {
+      background-color: var(--card-bg);
       border-radius: var(--radius);
-      padding: 1.25rem;
-      color: var(--muted);
-      font-size: 1.15rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-    }
-
-    .dragging { opacity: 0.4; }
-
-
-    /* CARD STYLES */
-    .bubble {
-      position: relative;
-      border-radius: var(--radius);
-      cursor: grab;
-      border: 2px solid transparent;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
-      transition: transform 0.1s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out, opacity 0.3s ease-out;
-      user-select: none;
-      touch-action: manipulation;
-      padding: 0; 
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
       display: flex;
       flex-direction: column;
-      background: var(--card-bg); 
-      color: var(--text); 
+      position: relative;
+      overflow: hidden;
+      color: var(--text);
+      transition: all 0.2s ease-in-out;
     }
-    .bubble:active { transform: scale(0.99); cursor: grabbing; }
 
-    .bubble.selected {
-      box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.75), 0 12px 26px rgba(0, 0, 0, 0.65);
-      border-color: var(--accent);
-      transform: scale(1.01);
-    }
-    
-    /* Card Header for Time Coloring (Top Bar) */
+    /* Status Bar at the top of the ticket */
     .bubble-top-bar {
-        background: var(--new); /* Default blue, will change based on time */
-        color: white;
-        padding: 0.7rem 1rem;
-        border-radius: var(--radius) var(--radius) 0 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-weight: 700;
+        padding: 8px 12px;
+        color: white;
+        font-weight: bold;
         text-transform: uppercase;
         font-size: 0.9rem;
     }
-
-    /* Time Coloring */
-    .bubble-top-bar.alert { background: var(--time-alert); }
-    .bubble-top-bar.critical { background: var(--time-critical); }
-
+    .bubble-top-bar.new { background-color: var(--new); }
+    .bubble-top-bar.in-progress { background-color: var(--progress); }
+    .bubble-top-bar.ready { background-color: var(--ready); }
+    .bubble-top-bar.cancelled { background-color: var(--cancel); }
 
     .bubble-body {
-        flex: 1;
-        padding: 1rem 1rem 0.95rem;
+        padding: 12px;
+        flex-grow: 1;
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
     }
     
-    .recall-btn {
-        background: var(--accent);
-        color: white;
-        border: none;
-        padding: 0.35rem 0.75rem;
-        border-radius: 6px;
-        font-weight: 700;
-        font-size: 0.95rem;
-        cursor: pointer;
-        transition: background 0.2s;
-        flex: 0 0 auto;
-        text-transform: uppercase;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-    .recall-btn:hover { background: #8e44ad; }
-    
-    .prioritize-btn {
-        background: none;
-        border: 1px solid white;
-        color: white;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        font-weight: 600;
-        font-size: 0.75rem;
-        cursor: pointer;
-        transition: background 0.2s, border-color 0.2s;
-        text-transform: uppercase;
-        margin-left: 0.5rem;
-    }
-    .prioritize-btn.is-prioritized {
-        background: white;
-        color: var(--time-critical);
-        border-color: var(--time-critical);
-    }
-
-    .bubble-status {
-      font-size: 0.85rem;
-      padding: 0.15rem 0.5rem;
-      border-radius: 6px;
-      font-weight: 800;
-      letter-spacing: 0.03em;
-      margin-top: 0.3rem;
-    }
-
     .bubble-header {
       display: flex;
-      align-items: flex-start;
       justify-content: space-between;
-      gap: 1rem;
-      padding-right: 0.5rem;
+      align-items: flex-start;
+      margin-bottom: 8px;
     }
 
     .bubble-number {
-      font-size: 3.4rem;
+      font-size: 2.5rem;
       font-weight: 900;
       line-height: 1;
-    }
-
-    .bubble-metas {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 0.2rem;
-      text-align: right;
-      min-width: 120px;
-      flex: 0 0 auto;
-    }
-    .bubble-timer {
-      font-size: 1.35rem;
-      font-weight: 900;
-      color: var(--time-default); /* New dark color for timer text */
-      line-height: 1.05;
+      color: var(--text);
     }
     .bubble-meta {
-      font-size: 1.0rem;
+      font-size: 1rem;
       color: var(--muted);
-      font-weight: 650;
+      margin-top: 4px;
     }
-
-    .bubble-items {
-      flex: 1;
-      border-top: 1px solid rgba(148, 163, 184, 0.35);
-      padding-top: 0.75rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.55rem;
-      overflow-y: auto; 
-      padding-bottom: 0.25rem;
-    }
-    .bubble-items::-webkit-scrollbar { width: 4px; }
-    .bubble-items::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 999px; }
-
-
-    .item-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.75rem;
-      cursor: pointer; /* Enable clicking item for completion */
-      padding: 0.2rem 0;
-    }
-    .item-row:hover .item-name {
-        color: var(--accent);
-    }
-    .item-row.completed .item-name,
-    .item-row.completed .item-qty {
-        color: var(--muted);
-        text-decoration: line-through;
-    }
-    .item-name-group {
+    
+    /* -----------------------------
+      NEW ORDER DETAILS SECTION (Service Type & Note)
+    --------------------------------*/
+    .bubble-details {
         display: flex;
-        align-items: center;
-        flex: 1;
-        min-width: 0;
+        flex-direction: column;
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
     }
-    .item-name {
-      font-size: 1.15rem; 
-      font-weight: 800;
-      color: var(--text);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
-      transition: color 0.2s;
+    .service-type {
+        font-size: 1.1rem;
+        font-weight: 900;
+        color: var(--accent);
+        text-transform: uppercase;
     }
-    .item-qty {
-      font-size: 1.05rem;
-      font-weight: 900;
-      padding: 0.12rem 0.5rem;
-      border-radius: 999px;
-      border: 1px solid rgba(168, 85, 247, 0.35);
-      background: rgba(168, 85, 247, 0.12);
-      color: var(--accent); /* Accent color for QTY on white background */
-      flex: 0 0 auto;
+    .customer-note {
+        font-size: 0.9rem;
+        font-style: italic;
+        color: var(--cancel);
+        padding: 0.25rem;
+        border: 1px dashed var(--cancel);
+        border-radius: 4px;
     }
     
-    /* Item Checkmark */
-    .item-check {
-        margin-right: 0.5rem;
-        color: var(--ready); /* Green checkmark */
-        font-size: 1.3rem;
-        opacity: 0;
-        transition: opacity 0.3s;
+    /* Timer and Priority */
+    .bubble-timer {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--time-default);
+      transition: color 0.5s ease;
     }
-    .item-row.completed .item-check {
-        opacity: 1;
-        animation: check-fade-in 0.5s ease;
+    .prioritize-btn {
+        background-color: var(--accent);
+        color: white;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: background-color 0.2s;
     }
-    @keyframes check-fade-in {
-        from { opacity: 0; transform: scale(0.5); }
-        to { opacity: 1; transform: scale(1); }
-    }
-
-    .item-mods {
-      margin-top: 0.15rem;
-      font-size: 0.98rem; 
-      color: var(--ready); /* Green for Modifiers */
-      font-style: italic;
-      line-height: 1.2;
-      padding-left: 0.85rem;
-      border-left: 3px solid rgba(34, 197, 94, 0.45);
-    }
-    .items-more {
-      margin-top: 0.35rem;
-      font-size: 1.0rem;
-      color: var(--muted);
-      font-weight: 650;
-    }
-
-    /* Status Specific Styles */
-    .bubble.new {
-      border-color: var(--new);
-      box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
-    }
-    .bubble.in-progress {
-      border-color: var(--progress);
-      box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
-    }
-    .bubble.in-progress .bubble-top-bar { background: var(--progress); }
-    .bubble.ready {
-      background: #f0fdf4; /* Very light green background */
-      border-color: var(--ready);
-      box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0, 0, 0, 0.45);
-    }
-    .bubble.ready .bubble-top-bar { background: var(--ready); color: var(--card-bg); }
-    
-    .bubble.done, .bubble.cancelled {
-      background: #e5e7eb; /* Light grey for completed/cancelled */
-      border-color: #94a3b8;
-      opacity: 0.9;
-    }
-    .bubble.done .bubble-top-bar, .bubble.cancelled .bubble-top-bar {
-      background: #94a3b8;
-      color: #334155;
-    }
-    
-    @media (max-width: 860px) {
-      header .subtitle { display: none; }
-      :root {
-            --card-width: 320px; 
-        }
+    .prioritize-btn.is-prioritized {
+        background-color: var(--new); /* Blue when prioritized */
     }
 
     /* -----------------------------
-      MODAL STYLES (Keep existing)
+      ITEM LIST STYLES
     --------------------------------*/
-    .modal {
-        display: none; 
-        position: fixed; 
-        z-index: 1000; 
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.4); 
-        justify-content: center;
-        align-items: center;
+    .bubble-items {
+      margin-top: 10px;
+      flex-grow: 1;
+      padding-right: 5px; /* Space for scrollbar */
+      overflow-y: auto;
     }
-    .modal.show { display: flex; }
 
-    .modal-content {
-        background-color: var(--card-bg);
-        padding: 2rem;
-        border-radius: var(--radius);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.7);
-        width: 300px;
-        text-align: center;
-        border: 1px solid var(--accent);
+    .item-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 4px 0;
+      border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: background-color 0.1s;
     }
-    .modal-content h3 {
-        margin-top: 0;
-        color: var(--text);
+    .item-row.completed {
+        opacity: 0.5;
+        text-decoration: line-through;
+        color: var(--muted);
     }
-    .row-option-btn {
+
+    .item-qty {
+      font-size: 1.2rem;
+      font-weight: 900;
+      color: var(--text);
+      flex-shrink: 0;
+      width: 30px; /* fixed width for quantity */
+    }
+
+    .item-name {
+      font-size: 1.2rem;
+      font-weight: 600;
+      flex-grow: 1;
+    }
+
+    .item-modifiers {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+      margin-left: 30px; /* Indent below quantity */
+    }
+
+    .modifier-item {
+      font-size: 1rem;
+      color: var(--progress); /* Orange color for modifiers */
+      margin-left: 10px;
+    }
+    .item-row.completed .modifier-item {
+        color: var(--muted);
+    }
+    
+    /* -----------------------------
+      ACTION BUTTONS
+    --------------------------------*/
+    .bubble-actions {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .complete-btn, .recall-btn {
+      width: 100%;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.2rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .complete-btn {
+      background-color: var(--ready);
+      color: white;
+    }
+    .complete-btn:hover { opacity: 0.9; }
+
+    .recall-btn {
+      background-color: var(--new);
+      color: white;
+      margin-left: 10px;
+      width: auto;
+      font-size: 1rem;
+      padding: 8px 12px;
+    }
+
+    .bubble-actions .recall-btn {
         display: block;
         width: 100%;
-        padding: 0.75rem;
-        margin-bottom: 0.75rem;
-        border: 2px solid var(--muted);
-        border-radius: 8px;
-        background-color: #1f2937;
-        color: var(--text);
-        font-size: 1.1rem;
-        cursor: pointer;
-        transition: all 0.2s;
+        margin: 0;
     }
-    .row-option-btn:hover {
-        background-color: #374151;
-    }
-    .row-option-btn.selected {
-        border-color: var(--accent);
-        background-color: var(--accent);
-        color: white;
-        font-weight: bold;
-        box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+
+    /* -----------------------------
+      MEDIA QUERIES
+    --------------------------------*/
+    @media (max-width: 768px) {
+        .kds-tabs {
+            padding: 5px 10px;
+            gap: 10px;
+        }
+        .kds-tab {
+            font-size: 1rem;
+            padding: 5px 10px;
+        }
+        .order-bubble {
+            --card-width: 95vw;
+        }
     }
 
   </style>
 </head>
-
 <body>
-  <header>
-    <div class="title">
-      <h1>VERTIDOG KDS</h1>
-      <span class="subtitle"></span> </div>
-    <div id="status-pills" class="status-tabs">
-      <div class="tab-pill active-tab" data-filter="active" onclick="setFilter('active')">ACTIVE (<span id="active-count">0</span>)</div>
-      <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
-      <div class="tab-pill" data-filter="cancelled" onclick="setFilter('cancelled')">CANCELLED (<span id="cancelled-count">0</span>)</div>
+  <div class="kds-container">
+    <div class="kds-tabs">
+        <button class="kds-tab active" data-filter="active">Active Orders</button>
+        <button class="kds-tab" data-filter="ready">Completed Orders</button>
+        <button class="kds-tab" data-filter="cancelled">Cancelled Orders</button>
     </div>
-    <div style="display: flex; gap: 0.5rem; align-items: center;">
-        <div class="status-pill" id="connection-status">
-            <span class="dot"></span>
-        </div>
-        <button class="options-btn" onclick="toggleOptionsModal()">⚙️</button>
-    </div>
-  </header>
-
-  <main id="bubble-container"
-        ondragover="handleDragOver(event, 'active')"
-        ondragleave="handleDragLeave(event, 'active')"
-        ondrop="handleDrop(event, 'active')">
-    </main>
-  
-  <div id="options-modal" class="modal" onclick="if(event.target.id === 'options-modal') toggleOptionsModal()">
-    <div class="modal-content">
-        <h3>Display Rows</h3>
-        <button class="row-option-btn" data-rows="1" onclick="setRows(1)">1 Row (Max Detail)</button>
-        <button class="row-option-btn" data-rows="2" onclick="setRows(2)">2 Rows (Medium Density)</button>
-        <button class="row-option-btn" data-rows="3" onclick="setRows(3)">3 Rows (Max Density)</button>
+    <div class="kds-tab-content">
+        <div id="active-bubble-grid" class="bubble-grid active"></div>
+        <div id="ready-bubble-grid" class="bubble-grid" style="display: none;"></div>
+        <div id="cancelled-bubble-grid" class="bubble-grid" style="display: none;"></div>
     </div>
   </div>
 
-
-  <audio id="ready-sound" preload="auto">
-    <source src="/sounds/order-ready.mp3" type="audio/mpeg" />
-  </audio>
-
   <script>
-    const WS_URL =
-      (location.protocol === "https:" ? "wss://" : "ws://") +
-      location.host +
-      "/ws";
-
-    const bubbleContainer = document.getElementById("bubble-container");
-    const connectionStatus = document.getElementById("connection-status");
-    const readySound = document.getElementById("ready-sound");
-    const optionsModal = document.getElementById("options-modal");
-    
-    const activeCountEl = document.getElementById("active-count");
-    const doneCountEl = document.getElementById("done-count");
-    const cancelledCountEl = document.getElementById("cancelled-count");
-
-    const orders = {};
-    let socket;
-    let selectedOrderNumber = null;
+    const API_URL = window.location.host;
+    let ws = null;
+    let store = {};
     let currentFilter = 'active';
-    let currentRows = 1; 
 
-    let pressTimer = null;
-    let isLongPress = false;
-    const LONG_PRESS_THRESHOLD = 700; 
-
-    let preferredVoice = null;
-    let announcementQueue = [];
-    let isAnnouncing = false;
+    // Time constants in milliseconds
+    const TIME_ALERT = 3 * 60 * 1000;    // 3 minutes
+    const TIME_CRITICAL = 5 * 60 * 1000; // 5 minutes
 
     // --- Utility Functions ---
 
+    /**
+     * Safely escapes HTML special characters for display.
+     */
     function escapeHtml(str) {
-      return String(str ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+      if (typeof str !== 'string') return str;
+      return str.replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
     }
 
-    function formatTimeElapsed(createdAt) {
-      if (!createdAt) return "0s";
-      const secondsElapsed = Math.floor(Math.max(0, Date.now() - createdAt) / 1000);
-      const minutes = Math.floor(secondsElapsed / 60);
-      const seconds = secondsElapsed % 60;
-      if (minutes > 0) return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
-      return `${seconds}s`;
-    }
-    
-    // --- Options Modal Logic ---
+    /**
+     * Formats elapsed time since a given timestamp.
+     */
+    function formatTimeElapsed(timestamp) {
+      const now = Date.now();
+      const elapsed = now - timestamp;
 
-    window.toggleOptionsModal = function() {
-        optionsModal.classList.toggle('show');
-        if(optionsModal.classList.contains('show')) {
-            document.querySelectorAll('.row-option-btn').forEach(btn => {
-                btn.classList.remove('selected');
-                if (parseInt(btn.dataset.rows) === currentRows) {
-                    btn.classList.add('selected');
-                }
-            });
-        }
-    }
+      const totalSeconds = Math.floor(elapsed / 1000);
+      const seconds = totalSeconds % 60;
+      const totalMinutes = Math.floor(totalSeconds / 60);
+      const minutes = totalMinutes % 60;
+      const hours = Math.floor(totalMinutes / 60);
 
-    window.setRows = function(rows) {
-        currentRows = rows;
-        document.documentElement.style.setProperty('--grid-rows', rows);
-        localStorage.setItem('kdsRows', rows);
-        render();
-        toggleOptionsModal();
-    }
-    
-    function loadInitialRows() {
-        const savedRows = localStorage.getItem('kdsRows');
-        if (savedRows) {
-            currentRows = parseInt(savedRows);
-            document.documentElement.style.setProperty('--grid-rows', currentRows);
-        }
-    }
-    loadInitialRows();
-
-
-    /* -----------------------------
-      TTS SETUP 
-    --------------------------------*/
-
-    function loadVoices() {
-      if (!("speechSynthesis" in window)) return;
-      const voices = window.speechSynthesis.getVoices();
-      preferredVoice =
-        voices.find((v) => v.name && v.name.includes("Google US English")) ||
-        voices.find((v) => v.lang && v.lang.startsWith("en")) ||
-        null;
-    }
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-      loadVoices();
-    }
-
-    function announceOrder(orderNumber) {
-      if (!("speechSynthesis" in window)) return null;
-      const msg = new SpeechSynthesisUtterance(`Order ${orderNumber} is ready for pick up`);
-      msg.volume = 1.0;
-      msg.rate = 0.98;
-      msg.pitch = 1.02;
-      if (preferredVoice) msg.voice = preferredVoice;
-      window.speechSynthesis.speak(msg);
-      return msg;
-    }
-
-    function queueAnnouncement(orderNumber) {
-      announcementQueue.push(orderNumber);
-      if (!isAnnouncing) playNextAnnouncement();
-    }
-
-    function playNextAnnouncement() {
-      if (announcementQueue.length === 0) {
-        isAnnouncing = false;
-        return;
+      const parts = [];
+      if (hours > 0) {
+        parts.push(hours.toString().padStart(2, '0'));
       }
-      isAnnouncing = true;
-      const orderNumber = announcementQueue.shift();
+      parts.push(minutes.toString().padStart(2, '0'));
+      parts.push(seconds.toString().padStart(2, '0'));
 
-      const doTTS = () => {
-        const utterance = announceOrder(orderNumber);
-        if (utterance) utterance.onend = () => playNextAnnouncement();
-        else playNextAnnouncement();
-      };
-
-      try {
-        readySound.currentTime = 0;
-        readySound.onended = () => { readySound.onended = null; doTTS(); };
-        readySound.play().catch(() => { readySound.onended = null; doTTS(); });
-      } catch (e) {
-        doTTS();
-      }
+      return parts.join(':');
     }
 
-    /* -----------------------------
-      WEBSOCKET & MESSAGING 
-    --------------------------------*/
+    // --- State Management ---
 
-    function setConnectionState(connected) {
-      const dot = connectionStatus.querySelector(".dot");
-      if (connected) {
-        dot.style.background = "#22c55e"; 
-        dot.style.boxShadow = "0 0 10px rgba(34, 197, 94, 0.9)";
-        connectionStatus.style.borderColor = "rgba(34, 197, 94, 0.4)";
-      } else {
-        dot.style.background = "#f97316"; 
-        dot.style.boxShadow = "0 0 10px rgba(249, 115, 22, 0.9)";
-        connectionStatus.style.borderColor = "rgba(249, 115, 22, 0.4)";
-      }
+    function getBubbleContainer(status) {
+        if (status === 'ready') return document.getElementById('ready-bubble-grid');
+        if (status === 'cancelled') return document.getElementById('cancelled-bubble-grid');
+        return document.getElementById('active-bubble-grid');
     }
 
-    function connect() {
-      setConnectionState(false);
-      socket = new WebSocket(WS_URL);
-
-      socket.onopen = () => {
-        setConnectionState(true);
-        sendMessage({ type: "SYNC_REQUEST" });
-      };
-
-      socket.onmessage = (event) => handleMessage(JSON.parse(event.data));
-
-      socket.onclose = () => {
-        setConnectionState(false);
-        setTimeout(connect, 2000);
-      };
-
-      socket.onerror = () => {};
+    function getOrderFilter(order) {
+        if (order.status === 'ready') return 'ready';
+        if (order.status === 'cancelled') return 'cancelled';
+        return 'active';
     }
 
-    function sendMessage(msg) {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify(msg));
-      }
-    }
-
-    function handleMessage(msg) {
-      switch (msg.type) {
-        case "NEW_ORDER":
-        case "ORDER_STATUS_UPDATE":
-          addOrUpdate(msg.orderNumber, msg.status || "new", msg);
-          break;
-
-        case "SYNC_STATE":
-          (msg.orders || []).forEach((o) => addOrUpdate(o.orderNumber, o.status || "new", o));
-          if (!selectedOrderNumber && (msg.orders || []).length > 0) {
-            selectedOrderNumber = msg.orders[0].orderNumber;
-          }
-          break;
-
-        case "ORDER_READY_CONFIRM":
-          markReady(msg.orderNumber, { playSound: true });
-          break;
-          
-        case "ITEM_COMPLETED_CONFIRM":
-            // Find the order and update the specific item status
-            if(orders[msg.orderNumber] && orders[msg.orderNumber].items[msg.itemIndex]) {
-                orders[msg.orderNumber].items[msg.itemIndex].completed = msg.completed;
-            }
-            // If all items are complete, mark the whole order ready
-            if(msg.allCompleted) {
-                markReady(msg.orderNumber, { playSound: false }); // Don't double-play sound if order ready was handled on server
-            }
-            render();
-            break;
-            
-        case "ORDER_PRIORITY_TOGGLE":
-            if (orders[msg.orderNumber]) {
-                orders[msg.orderNumber].isPrioritized = msg.isPrioritized;
-            }
-            render();
-            break;
-      }
-      render();
-    }
-    
-    /* -----------------------------
-      STATUS AND INTERACTION LOGIC
-    --------------------------------*/
-    
-    // Toggle Priority Status
-    window.togglePriority = function(orderNumber, event) {
-        if (event) event.stopPropagation(); 
-        const o = orders[orderNumber];
-        if (!o || o.status === "done" || o.status === "cancelled") return;
-
-        o.isPrioritized = !o.isPrioritized;
-        sendMessage({ 
-            type: "ORDER_PRIORITY_TOGGLE", 
-            orderNumber: orderNumber, 
-            isPrioritized: o.isPrioritized 
+    function getFilteredOrders(filter) {
+        let orders = Object.values(store);
+        
+        // Sort by priority (prioritized first) and then by creation time (oldest first)
+        orders.sort((a, b) => {
+            if (a.isPrioritized && !b.isPrioritized) return -1;
+            if (!a.isPrioritized && b.isPrioritized) return 1;
+            return a.createdAt - b.createdAt;
         });
-        render(); // Re-render to apply new sort order
+
+        if (filter === 'active') {
+            return orders.filter(o => o.status === 'new' || o.status === 'in-progress');
+        }
+        return orders.filter(o => getOrderFilter(o) === filter);
     }
 
+    // --- Timer & Visuals ---
 
-    window.setFilter = function(newFilter) {
-      if (currentFilter === newFilter) return;
-      currentFilter = newFilter;
-      document.querySelectorAll('.tab-pill').forEach(pill => {
-        pill.classList.remove('active-tab');
-        if (pill.dataset.filter === newFilter) {
-          pill.classList.add('active-tab');
+    function updateTimers() {
+      const now = Date.now();
+      const timerElements = document.querySelectorAll('.bubble-timer');
+      
+      const timeAlertColor = getComputedStyle(document.documentElement).getPropertyValue('--time-alert').trim();
+      const timeCriticalColor = getComputedStyle(document.documentElement).getPropertyValue('--time-critical').trim();
+      const timeDefaultColor = getComputedStyle(document.documentElement).getPropertyValue('--time-default').trim();
+
+
+      timerElements.forEach(timerEl => {
+        const orderId = timerEl.closest('.order-bubble').dataset.orderid;
+        const order = store[orderId];
+        
+        if (!order) return;
+
+        const elapsed = now - order.createdAt;
+        timerEl.textContent = formatTimeElapsed(order.createdAt);
+        
+        // Set color based on elapsed time
+        if (elapsed > TIME_CRITICAL) {
+          timerEl.style.color = timeCriticalColor;
+        } else if (elapsed > TIME_ALERT) {
+          timerEl.style.color = timeAlertColor;
+        } else {
+          timerEl.style.color = timeDefaultColor;
         }
       });
-      selectedOrderNumber = null;
-      render();
     }
 
-    function handleDragStart(event) {
-      const orderNumber = event.currentTarget?.dataset?.order;
-      event.dataTransfer.setData("text/plain", orderNumber);
-      event.currentTarget.classList.add("dragging");
-    }
-
-    function handleDragEnd(event) {
-      event.currentTarget.classList.remove("dragging");
-    }
-
-    function handleDragOver(event, targetType) {
-      event.preventDefault();
-      if (currentFilter === 'active') {
-          bubbleContainer.classList.add(`drag-over-${targetType}`);
-      }
-    }
-
-    function handleDragLeave(event, targetType) {
-      if (currentFilter === 'active') {
-          bubbleContainer.classList.remove(`drag-over-${targetType}`);
-      }
-    }
-
-    function handleDrop(event, targetType) {
-      event.preventDefault();
-      const orderNumber = event.dataTransfer.getData("text/plain");
-      bubbleContainer.classList.remove("drag-over-active");
-      if (!orderNumber || !orders[orderNumber]) return;
-      
-      const o = orders[orderNumber];
-      
-      if (o.status === "done" || o.status === "cancelled") {
-        window.recallOrder(orderNumber, event); 
-      } else {
-         return; 
-      }
-      selectedOrderNumber = orderNumber;
-      render();
-    }
-
-    function handleLongPressStart(event) {
-      if (event.dataTransfer) return; 
-      const orderNumber = event.currentTarget.dataset.order;
-      const o = orders[orderNumber];
-      if (!o || (o.status === "done" || o.status === "cancelled")) return;
-
-      isLongPress = false;
-      clearTimeout(pressTimer);
-      event.currentTarget.style.userSelect = 'none';
-
-      pressTimer = setTimeout(() => {
-          isLongPress = true;
-          pressTimer = null; 
-          event.currentTarget.style.userSelect = 'auto';
-          // Using a simple confirm as requested in previous turn
-          const confirmed = window.confirm(`Are you sure you want to CANCEL order ${orderNumber}?`);
-          if (confirmed) {
-              cancelOrder(orderNumber);
-          } else {
-              isLongPress = false;
-          }
-      }, LONG_PRESS_THRESHOLD);
-    }
-
-    function handlePressEnd(event) {
-      clearTimeout(pressTimer);
-      pressTimer = null;
-      if (event.currentTarget) {
-          event.currentTarget.style.userSelect = 'auto';
-      }
-      if (isLongPress) {
-          event.preventDefault(); 
-          event.stopPropagation();
-      }
-    }
-
-    window.cancelOrder = function(orderNumber) {
-      const o = orders[orderNumber];
-      if (!o) return;
-      o.status = "cancelled";
-      sendMessage({ type: "ORDER_CANCELLED", orderNumber: orderNumber });
-      selectedOrderNumber = null;
-      render();
-    }
-
-    function addOrUpdate(orderNumber, status, data = {}) {
-      const existing = orders[orderNumber] || {};
-      
-      // Ensure the items array maintains existing completion status if possible
-      let updatedItems = data.items || existing.items || [];
-      if (existing.items && existing.items.length === updatedItems.length) {
-          updatedItems = updatedItems.map((newItem, index) => ({
-              ...newItem,
-              completed: existing.items[index].completed || false,
-          }));
-      } else {
-          // Initialize completion status if items array structure changed
-          updatedItems = updatedItems.map(item => ({...item, completed: false}));
-      }
-
-      orders[orderNumber] = {
-        orderNumber,
-        status,
-        createdAt: data.createdAt || existing.createdAt || Date.now(),
-        itemCount: data.itemCount ?? existing.itemCount ?? null,
-        items: updatedItems,
-        orderId: data.orderId || existing.orderId,
-        isPrioritized: data.isPrioritized ?? existing.isPrioritized ?? false, // Initialize/update priority
-      };
-
-      if ((status === "cancelled" || status === "done") && selectedOrderNumber === orderNumber) {
-        selectedOrderNumber = null;
-      }
-    }
-
-    function triggerReadyActions(orderNumber, options = {}) {
-      const o = orders[orderNumber];
-      if (!o) return;
-
-      if (options.playSound) queueAnnouncement(orderNumber);
-
-      // Transition to done status after 5 seconds
-      setTimeout(() => {
-        const oCheck = orders[orderNumber];
-        if (oCheck && oCheck.status === "ready") {
-          oCheck.status = "done";
-          sendMessage({ type: "ORDER_COMPLETED", orderNumber });
-          render();
-        }
-      }, 5000);
-    }
-
-    window.cycleStatus = function(orderNumber) {
-      if (isLongPress) {
-          isLongPress = false;
-          return;
-      }
-      
-      const o = orders[orderNumber];
-      selectedOrderNumber = orderNumber;
-
-      if (!o || o.status === "cancelled" || o.status === "done") {
-        return render();
-      }
-
-      if (o.status === "new") {
-        o.status = "in-progress";
-      } else if (o.status === "in-progress") {
-        // If cycling status, reset item completion for a full mark ready
-        o.items.forEach(item => item.completed = true);
-        o.status = "ready";
-        sendMessage({ type: "ORDER_READY", orderNumber });
-        triggerReadyActions(orderNumber, { playSound: true });
-      } else if (o.status === "ready") {
-        o.status = "done";
-        sendMessage({ type: "ORDER_COMPLETED", orderNumber });
-      }
-
-      render();
-    }
-    
-    window.recallOrder = function(orderNumber, event) {
-      if (event) event.stopPropagation(); 
-      
-      const o = orders[orderNumber];
-      if (!o || (o.status !== "done" && o.status !== "cancelled")) return;
-      
-      // Reset items to incomplete upon recall
-      o.items.forEach(item => item.completed = false); 
-      o.status = "in-progress";
-      sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
-      
-      selectedOrderNumber = orderNumber;
-      setFilter('active'); 
-      render();
-    }
-
-
-    function markReady(orderNumber, options = {}) {
-      const o = orders[orderNumber];
-      if (!o || o.status === "done" || o.status === "cancelled") return;
-      o.status = "ready";
-      selectedOrderNumber = orderNumber;
-      render();
-      triggerReadyActions(orderNumber, options);
-    }
-    
-    // Function to toggle item completion status
-    window.toggleItemCompletion = function(orderNumber, itemIndex, event) {
-        if (event) event.stopPropagation(); 
-        
-        const o = orders[orderNumber];
-        if (!o || o.status === "ready" || o.status === "done" || o.status === "cancelled") return;
-
-        const item = o.items[itemIndex];
-        if (!item) return;
-        
-        const newCompletedStatus = !item.completed;
-        
-        // Optimistically update status
-        item.completed = newCompletedStatus;
-        
-        // Change status to in-progress if starting completion
-        if (o.status === "new" && newCompletedStatus) {
-            o.status = "in-progress";
-        }
-        
-        const allCompleted = o.items.every(i => i.completed);
-        
-        // Send message to server to update state
-        sendMessage({
-            type: "ITEM_COMPLETED",
-            orderNumber: orderNumber,
-            itemIndex: itemIndex,
-            completed: newCompletedStatus,
-            allCompleted: allCompleted
-        });
-        
-        if(allCompleted) {
-            markReady(orderNumber, { playSound: true });
-        }
-        
-        render();
-    }
-
-    // Function to update timers and color codes
-    function updateTimers() {
-      if (currentFilter === 'active') {
-        document.querySelectorAll(".bubble").forEach((bubbleEl) => {
-          const orderNumber = bubbleEl.dataset.order;
-          const order = orders[orderNumber];
-          const timerEl = bubbleEl.querySelector(".bubble-timer");
-          const topBarEl = bubbleEl.querySelector(".bubble-top-bar");
-          
-          if (order && timerEl && topBarEl) {
-              const secondsElapsed = Math.floor(Math.max(0, Date.now() - order.createdAt) / 1000);
-              
-              timerEl.textContent = formatTimeElapsed(order.createdAt);
-              
-              topBarEl.classList.remove('alert', 'critical');
-              
-              if (order.status !== 'ready') {
-                if (secondsElapsed >= 300) { // 5 minutes
-                    topBarEl.classList.add('critical');
-                } else if (secondsElapsed >= 180) { // 3 minutes
-                    topBarEl.classList.add('alert');
-                }
-              }
-          }
-        });
-      }
-    }
+    // Set up the interval to update timers every second
     setInterval(updateTimers, 1000);
-    
-    /* -----------------------------
-      RENDERING
-    --------------------------------*/
-    
-    function renderItemsHtml(orderNumber, items = [], maxItems = 99) {
-      if (!Array.isArray(items) || items.length === 0) {
-        return `<div class="items-more">No item details.</div>`;
-      }
 
-      const slice = items.slice(0, maxItems); 
-      const rows = slice.map((item, index) => {
-        const name = escapeHtml(item?.name || "Item");
-        const qty = Number(item?.quantity ?? 1);
-        const mods = Array.isArray(item?.modifiers) ? item.modifiers.filter(Boolean) : [];
-        const modsShown = mods.slice(0, 3).map(escapeHtml).join(", ");
-        const modsMore = mods.length > 3 ? `, +${mods.length - 3} more` : "";
-        const isCompleted = item.completed || false;
-        const completionClass = isCompleted ? 'completed' : '';
+    // --- WebSocket Communication ---
 
-        return `
-          <div data-item-index="${index}" onclick="window.toggleItemCompletion('${orderNumber}', ${index}, event)">
-            <div class="item-row ${completionClass}">
-              <div class="item-name-group">
-                <span class="item-check">✓</span>
-                <div class="item-name">${name}</div>
-              </div>
-              <div class="item-qty">x${Number.isFinite(qty) ? qty : 1}</div>
-            </div>
-            ${mods.length ? `<div class="item-mods">| + ${modsShown}${modsMore}</div>` : ``}
-          </div>
-        `;
-      }).join("");
-
-      const more = items.length > maxItems
-        ? `<div class="items-more">+ ${items.length - maxItems} more item(s)</div>`
-        : ``;
-
-      return rows + more;
+    function sendWebSocketMessage(type, data = {}) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            const message = JSON.stringify({ type, ...data });
+            ws.send(message);
+        } else {
+            console.warn("WebSocket is not open. Attempting to reconnect.");
+            connect();
+        }
     }
 
-    function render() {
-      let list = Object.values(orders).sort((a, b) => a.createdAt - b.createdAt);
-      const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
-      const done = list.filter((o) => o.status === "done");
-      const cancelled = list.filter((o) => o.status === "cancelled");
+    window.markReady = function(orderNumber, orderId, event) {
+        event.stopPropagation();
+        if (confirm(`Mark order #${orderNumber} as COMPLETED?`)) {
+            sendWebSocketMessage("ORDER_READY", { orderNumber, orderId });
+        }
+    }
+
+    window.recallOrder = function(orderNumber, orderId, event) {
+        event.stopPropagation();
+        if (confirm(`Recall order #${orderNumber} back to Active?`)) {
+            sendWebSocketMessage("ORDER_REACTIVATED", { orderNumber, orderId });
+        }
+    }
+
+    window.cancelOrder = function(orderNumber, orderId, event) {
+        event.stopPropagation();
+        if (confirm(`Cancel order #${orderNumber}?`)) {
+            sendWebSocketMessage("ORDER_CANCELLED", { orderNumber, orderId });
+        }
+    }
+
+    window.togglePriority = function(orderNumber, orderId, event) {
+        event.stopPropagation();
+        const order = store[orderId];
+        if (order) {
+            const newPriority = !order.isPrioritized;
+            // Optimistic update
+            order.isPrioritized = newPriority; 
+            sendWebSocketMessage("ORDER_PRIORITY_TOGGLE", { orderNumber, orderId, isPrioritized: newPriority });
+            render(currentFilter);
+        }
+    }
+    
+    window.toggleItem = function(orderId, itemIndex) {
+        const order = store[orderId];
+        if (order && order.items[itemIndex]) {
+            const newCompleted = !order.items[itemIndex].completed;
+            order.items[itemIndex].completed = newCompleted; // Optimistic update
+            
+            // Check if all active items are now completed to prompt for order completion
+            const allItemsCompleted = order.items.every(item => item.completed);
+
+            if (allItemsCompleted && order.status !== 'ready' && order.status !== 'cancelled') {
+                // If all items are completed, prompt to mark the entire order as ready
+                if (confirm(`All items for order #${order.orderNumber} are done. Mark order as COMPLETED?`)) {
+                    sendWebSocketMessage("ORDER_READY", { orderNumber: order.orderNumber, orderId: order.orderId });
+                }
+            } else {
+                // Only toggle the item status if not completing the order
+                sendWebSocketMessage("ORDER_ITEM_TOGGLE", {
+                    orderNumber: order.orderNumber,
+                    orderId: order.orderId,
+                    itemIndex,
+                    completed: newCompleted
+                });
+            }
+
+            render(currentFilter); // Re-render to reflect the change visually
+        }
+    }
+
+    // --- Rendering Functions ---
+
+    function renderItemsHtml(orderId, items) {
+        if (!Array.isArray(items) || items.length === 0) {
+            return '<div style="color:var(--cancel);font-style:italic;">No items found.</div>';
+        }
+
+        let html = '';
+        items.forEach((item, index) => {
+            // Modifiers List
+            const modifiersHtml = item.modifiers && item.modifiers.length > 0
+                ? `<ul class="item-modifiers">
+                    ${item.modifiers.map(m => `<li class="modifier-item">-- ${escapeHtml(m)}</li>`).join('')}
+                   </ul>`
+                : '';
+
+            // Item Row
+            html += `
+                <div class="item-row ${item.completed ? 'completed' : ''}" 
+                     data-item-index="${index}" 
+                     onclick="window.toggleItem('${orderId}', ${index})">
+                    <span class="item-qty">${escapeHtml(item.quantity)}x</span>
+                    <span class="item-name">${escapeHtml(item.name)}</span>
+                </div>
+                ${modifiersHtml}
+            `;
+        });
+        return html;
+    }
+
+    function render(filter) {
+      currentFilter = filter;
+      const ordersToRender = getFilteredOrders(filter);
       
-      let filteredList = [];
-      let emptyMessage = "No active orders.";
+      const allContainers = document.querySelectorAll('.bubble-grid');
+      allContainers.forEach(c => c.style.display = 'none');
       
-      if (currentFilter === 'done') {
-          filteredList = done.sort((a, b) => b.createdAt - a.createdAt);
-          emptyMessage = "No completed orders.";
-      } else if (currentFilter === 'cancelled') {
-          filteredList = cancelled.sort((a, b) => b.createdAt - a.createdAt);
-          emptyMessage = "No cancelled orders.";
-      } else {
-          // ACTIVE FILTER: Prioritize tickets first, then by oldest (createdAt)
-          filteredList = active.sort((a, b) => {
-              if (a.isPrioritized && !b.isPrioritized) return -1;
-              if (!a.isPrioritized && b.isPrioritized) return 1;
-              return a.createdAt - b.createdAt;
-          });
-          emptyMessage = "No active orders.";
+      const bubbleContainer = getBubbleContainer(filter);
+      if (bubbleContainer) {
+          bubbleContainer.style.display = 'grid';
+          bubbleContainer.innerHTML = ''; // Clear existing bubbles
       }
 
-      activeCountEl.textContent = active.length;
-      doneCountEl.textContent = done.length;
-      cancelledCountEl.textContent = cancelled.length;
+      ordersToRender.forEach(o => {
+        const b = document.createElement('div');
+        b.className = 'order-bubble';
+        b.dataset.ordernumber = o.orderNumber;
+        b.dataset.orderid = o.orderId;
+        b.dataset.status = o.status;
 
-      bubbleContainer.innerHTML = "";
-      
-      if (filteredList.length === 0) {
-        const emptyStateWrapper = document.createElement('div');
-        emptyStateWrapper.className = 'empty-state-wrapper';
-        emptyStateWrapper.innerHTML = `<div class="empty-state"><div>${emptyMessage}</div></div>`;
-        bubbleContainer.appendChild(emptyStateWrapper);
-        bubbleContainer.classList.remove('multi-row-container'); 
-      } else {
-        // Apply multi-row class to the container when needed
-        if (currentRows > 1) {
-            bubbleContainer.classList.add('multi-row-container');
-        } else {
-            bubbleContainer.classList.remove('multi-row-container');
-        }
+        // Status-dependent content
+        let statusText = o.status.toUpperCase().replace('-', ' ');
+        const isActiveStatus = o.status === 'new' || o.status === 'in-progress';
         
-        filteredList.forEach((o) => {
-          const isSelected = o.orderNumber === selectedOrderNumber;
-          const isActiveStatus = (o.status === "new" || o.status === "in-progress" || o.status === "ready");
+        const priorityIcon = o.isPrioritized && isActiveStatus ? '⭐' : '';
 
-          const b = document.createElement("div");
-          b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
-          b.dataset.order = o.orderNumber;
-          
-          b.setAttribute("draggable", true);
-          b.ondragstart = handleDragStart;
-          b.ondragend = handleDragEnd;
-          
-          if (isActiveStatus) {
-              b.onmousedown = handleLongPressStart;
-              b.onmouseup = handlePressEnd;
-              b.onmouseleave = handlePressEnd;
-              b.ontouchstart = handleLongPressStart;
-              b.ontouchend = handlePressEnd;
-              b.ontouchcancel = handlePressEnd;
-          }
-          
-          b.onclick = (e) => {
-              if (isActiveStatus && !isLongPress) {
-                  window.cycleStatus(o.orderNumber); 
-              } else if (!isActiveStatus) {
-                  selectedOrderNumber = o.orderNumber; 
-                  render(); 
-              }
-          };
+        // Priority Button
+        const priorityBtn = isActiveStatus 
+            ? `<button class="prioritize-btn ${o.isPrioritized ? 'is-prioritized' : ''}" onclick="window.togglePriority('${o.orderNumber}', '${o.orderId}', event)">${o.isPrioritized ? 'PRIORITIZED' : 'PRIORITIZE'}</button>` 
+            : '';
 
-          const statusText =
-            o.status === "new" ? "NEW" :
-            o.status === "in-progress" ? "IN PROGRESS" : 
-            o.status === "ready" ? "READY" :
-            o.status === "done" ? "COMPLETED" : "CANCELLED";
+        // Complete Button (only for active orders)
+        const completeBtnHtml = isActiveStatus 
+            ? `<button class="complete-btn" onclick="window.markReady('${o.orderNumber}', '${o.orderId}', event)">MARK COMPLETED</button>` 
+            : '';
 
-          const itemCountText =
-            o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
-
-          const recallButtonHtml = isActiveStatus 
-             ? '' 
-             : `<button class="recall-btn" onclick="window.recallOrder('${o.orderNumber}', event)">RECALL</button>`;
-          
-          const priorityIcon = o.isPrioritized ? '⚠️' : '';
-          const priorityBtn = isActiveStatus 
-             ? `<button class="prioritize-btn ${o.isPrioritized ? 'is-prioritized' : ''}" onclick="window.togglePriority('${o.orderNumber}', event)">${o.isPrioritized ? 'PRIORITIZED' : 'PRIORITIZE'}</button>` 
-             : '';
-
-          const timerHtml = currentFilter === 'active' 
-              ? `<span class="bubble-timer">${formatTimeElapsed(o.createdAt)}</span>` 
-              : '';
-          
-          const itemsHtml = renderItemsHtml(o.orderNumber, o.items, 99);
-          
-          b.innerHTML = `
+        // Recall Button (only for ready/cancelled orders)
+        const recallButtonHtml = (o.status === 'ready' || o.status === 'cancelled')
+            ? `<button class="recall-btn" onclick="window.recallOrder('${o.orderNumber}', '${o.orderId}', event)">RECALL</button>`
+            : '';
+        
+        // Timer
+        const timerHtml = isActiveStatus 
+            ? `<span class="bubble-timer">${formatTimeElapsed(o.createdAt)}</span>` 
+            : '';
+        
+        const itemCountText = `${o.itemCount} Item${o.itemCount === 1 ? '' : 's'}`;
+        const itemsHtml = renderItemsHtml(o.orderId, o.items); 
+        
+        // --- NEW TEMPLATE INCLUDES serviceType and customerNote ---
+        const noteHtml = o.customerNote 
+            ? `<div class="customer-note">NOTE: ${escapeHtml(o.customerNote)}</div>` 
+            : '';
+            
+        b.innerHTML = `
             <div class="bubble-top-bar ${o.status !== 'ready' ? o.status : ''}">
                 <div>${statusText} ${priorityIcon} ${priorityBtn}</div>
                 <div>${timerHtml}</div>
@@ -1220,28 +604,165 @@
 
             <div class="bubble-body">
                 <div class="bubble-header">
-                  <div>
-                    <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
-                    <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
-                  </div>
-                  <div class="bubble-metas">
-                    ${recallButtonHtml}
-                  </div>
+                    <div>
+                        <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
+                        <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
+                    </div>
+                    <div class="bubble-metas">
+                        ${recallButtonHtml}
+                    </div>
+                </div>
+
+                <div class="bubble-details">
+                    <div class="service-type">${escapeHtml(o.serviceType)}</div>
+                    ${noteHtml}
                 </div>
 
                 <div class="bubble-items">
-                  ${itemsHtml}
+                    ${itemsHtml}
+                </div>
+                
+                <div class="bubble-actions">
+                    ${completeBtnHtml}
                 </div>
             </div>
-          `;
+        `;
 
-          bubbleContainer.appendChild(b);
-          // Initial timer update to set the color bar immediately
-          updateTimers(); 
-        });
-      }
+        bubbleContainer.appendChild(b);
+        updateTimers(); 
+      });
+
+      // Update active tab visual
+      document.querySelectorAll('.kds-tab').forEach(tab => {
+          if (tab.dataset.filter === filter) {
+              tab.classList.add('active');
+          } else {
+              tab.classList.remove('active');
+          }
+      });
     }
 
+    // --- Tab Switching Logic ---
+    document.querySelectorAll('.kds-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            const filter = e.target.dataset.filter;
+            render(filter);
+        });
+    });
+
+    // --- WebSocket Connection ---
+
+    function handleNewOrder(data) {
+        // Ensure new orders have the 'completed' field initialized
+        if (data.items) {
+            data.items = data.items.map(item => ({
+                ...item,
+                completed: item.completed ?? false
+            }));
+        }
+        data.isPrioritized = data.isPrioritized ?? false;
+        
+        store[data.orderId] = data;
+        render(currentFilter);
+        updateTimers();
+    }
+    
+    function handleSyncState(data) {
+        store = {}; // Reset store
+        data.orders.forEach(order => {
+            // Ensure data structure is consistent on sync
+            if (order.items) {
+                order.items = order.items.map(item => ({
+                    ...item,
+                    completed: item.completed ?? false
+                }));
+            }
+            order.isPrioritized = order.isPrioritized ?? false;
+            store[order.orderId] = order;
+        });
+        render(currentFilter);
+        updateTimers();
+    }
+    
+    function handleOrderReadyConfirm(data) {
+        const order = store[data.orderId] || Object.values(store).find(o => o.orderNumber === data.orderNumber);
+        if (order) {
+            order.status = data.status; // status is passed back as 'ready', 'in-progress', or 'cancelled'
+            render(currentFilter);
+        }
+    }
+    
+    function handlePriorityToggle(data) {
+        const order = store[data.orderId] || Object.values(store).find(o => o.orderNumber === data.orderNumber);
+        if (order) {
+            order.isPrioritized = data.isPrioritized;
+            render(currentFilter);
+        }
+    }
+    
+    function handleItemToggle(data) {
+        const order = store[data.orderId] || Object.values(store).find(o => o.orderNumber === data.orderNumber);
+        if (order && order.items[data.itemIndex]) {
+            order.items[data.itemIndex].completed = data.completed;
+            render(currentFilter);
+        }
+    }
+
+
+    function connect() {
+      if (ws) { ws.close(); } // Close previous connection if exists
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${protocol}//${API_URL}`;
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected. Requesting sync.');
+        // Request initial state sync immediately after connecting
+        sendWebSocketMessage("SYNC_REQUEST"); 
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          switch (data.type) {
+            case 'SYNC_STATE':
+                handleSyncState(data);
+                break;
+            case 'NEW_ORDER':
+                handleNewOrder(data);
+                break;
+            case 'ORDER_READY_CONFIRM':
+                handleOrderReadyConfirm(data);
+                break;
+            case 'ORDER_PRIORITY_TOGGLE':
+                handlePriorityToggle(data);
+                break;
+            case 'ORDER_ITEM_TOGGLE':
+                handleItemToggle(data);
+                break;
+            default:
+              console.log('Unknown message type:', data.type);
+          }
+        } catch (e) {
+          console.error('Error processing WebSocket message:', e);
+        }
+      };
+
+      ws.onclose = (e) => {
+        console.log('WebSocket closed. Reconnecting in 5 seconds...', e.reason);
+        setTimeout(connect, 5000);
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+        ws.close();
+      };
+    }
+
+    // Start the connection process
     connect();
   </script>
 </body>
