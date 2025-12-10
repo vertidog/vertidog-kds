@@ -472,12 +472,12 @@
     }
     .bubble.ready .bubble-top-bar { background: var(--ready); color: var(--card-bg); }
     
-    .bubble.done, .bubble.cancelled {
+    .bubble.done, .bubble.cancelled, .bubble.canceled {
       background: #e5e7eb; /* Light grey for completed/cancelled */
       border-color: #94a3b8;
       opacity: 0.9;
     }
-    .bubble.done .bubble-top-bar, .bubble.cancelled .bubble-top-bar {
+    .bubble.done .bubble-top-bar, .bubble.cancelled .bubble-top-bar, .bubble.canceled .bubble-top-bar {
       background: #94a3b8;
       color: #334155;
     }
@@ -554,7 +554,7 @@
     <div id="status-pills" class="status-tabs">
       <div class="tab-pill active-tab" data-filter="active" onclick="setFilter('active')">ACTIVE (<span id="active-count">0</span>)</div>
       <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
-      <div class="tab-pill" data-filter="cancelled" onclick="setFilter('cancelled')">CANCELLED (<span id="cancelled-count">0</span>)</div>
+      <div class="tab-pill" data-filter="cancelled" onclick="setFilter('cancelled')">CANCELED (<span id="cancelled-count">0</span>)</div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
         <div class="status-pill" id="connection-status">
@@ -631,6 +631,15 @@
       const seconds = secondsElapsed % 60;
       if (minutes > 0) return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
       return `${seconds}s`;
+    }
+
+    function normalizeStatus(status) {
+      if (!status) return "";
+      return status === "cancelled" ? "canceled" : status;
+    }
+
+    function isCanceledStatus(status) {
+      return normalizeStatus(status) === "canceled";
     }
     
     // --- Options Modal Logic ---
@@ -809,9 +818,9 @@
     
     // Toggle Priority Status
     window.togglePriority = function(orderNumber, event) {
-        if (event) event.stopPropagation(); 
+        if (event) event.stopPropagation();
         const o = orders[orderNumber];
-        if (!o || o.status === "done" || o.status === "cancelled") return;
+        if (!o || o.status === "done" || isCanceledStatus(o.status)) return;
 
         o.isPrioritized = !o.isPrioritized;
         sendMessage({ 
@@ -867,10 +876,10 @@
       
       const o = orders[orderNumber];
       
-      if (o.status === "done" || o.status === "cancelled") {
-        window.recallOrder(orderNumber, event); 
+      if (o.status === "done" || isCanceledStatus(o.status)) {
+        window.recallOrder(orderNumber, event);
       } else {
-         return; 
+         return;
       }
       selectedOrderNumber = orderNumber;
       render();
@@ -880,7 +889,7 @@
       if (event.dataTransfer) return; 
       const orderNumber = event.currentTarget.dataset.order;
       const o = orders[orderNumber];
-      if (!o || (o.status === "done" || o.status === "cancelled")) return;
+      if (!o || o.status === "done" || isCanceledStatus(o.status)) return;
 
       isLongPress = false;
       clearTimeout(pressTimer);
@@ -915,7 +924,7 @@
     window.cancelOrder = function(orderNumber) {
       const o = orders[orderNumber];
       if (!o) return;
-      o.status = "cancelled";
+      o.status = "canceled";
       sendMessage({ type: "ORDER_CANCELLED", orderNumber: orderNumber });
       selectedOrderNumber = null;
       render();
@@ -923,7 +932,8 @@
 
     function addOrUpdate(orderNumber, status, data = {}) {
       const existing = orders[orderNumber] || {};
-      
+      const normalizedStatus = normalizeStatus(status || existing.status || "new");
+
       // Ensure the items array maintains existing completion status if possible
       let updatedItems = data.items || existing.items || [];
       if (existing.items && existing.items.length === updatedItems.length) {
@@ -938,7 +948,7 @@
 
       orders[orderNumber] = {
         orderNumber,
-        status,
+        status: normalizedStatus,
         createdAt: data.createdAt || existing.createdAt || Date.now(),
         itemCount: data.itemCount ?? existing.itemCount ?? null,
         items: updatedItems,
@@ -946,7 +956,7 @@
         isPrioritized: data.isPrioritized ?? existing.isPrioritized ?? false, // Initialize/update priority
       };
 
-      if ((status === "cancelled" || status === "done") && selectedOrderNumber === orderNumber) {
+      if ((isCanceledStatus(normalizedStatus) || normalizedStatus === "done") && selectedOrderNumber === orderNumber) {
         selectedOrderNumber = null;
       }
     }
@@ -977,7 +987,7 @@
       const o = orders[orderNumber];
       selectedOrderNumber = orderNumber;
 
-      if (!o || o.status === "cancelled" || o.status === "done") {
+      if (!o || isCanceledStatus(o.status) || o.status === "done") {
         return render();
       }
 
@@ -1001,7 +1011,7 @@
       if (event) event.stopPropagation(); 
       
       const o = orders[orderNumber];
-      if (!o || (o.status !== "done" && o.status !== "cancelled")) return;
+      if (!o || (o.status !== "done" && !isCanceledStatus(o.status))) return;
       
       // Reset items to incomplete upon recall
       o.items.forEach(item => item.completed = false); 
@@ -1016,7 +1026,7 @@
 
     function markReady(orderNumber, options = {}) {
       const o = orders[orderNumber];
-      if (!o || o.status === "done" || o.status === "cancelled") return;
+      if (!o || o.status === "done" || isCanceledStatus(o.status)) return;
       o.status = "ready";
       selectedOrderNumber = orderNumber;
       render();
@@ -1028,7 +1038,7 @@
         if (event) event.stopPropagation(); 
         
         const o = orders[orderNumber];
-        if (!o || o.status === "ready" || o.status === "done" || o.status === "cancelled") return;
+        if (!o || o.status === "ready" || o.status === "done" || isCanceledStatus(o.status)) return;
 
         const item = o.items[itemIndex];
         if (!item) return;
@@ -1135,10 +1145,19 @@
     }
 
     function render() {
-      let list = Object.values(orders).sort((a, b) => a.createdAt - b.createdAt);
-      const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
+      let list = Object.values(orders)
+        .map((o) => {
+          const normalized = normalizeStatus(o.status);
+          if (normalized !== o.status) {
+            o.status = normalized;
+          }
+          return o;
+        })
+        .sort((a, b) => a.createdAt - b.createdAt);
+
+      const active = list.filter((o) => o.status !== "done" && !isCanceledStatus(o.status));
       const done = list.filter((o) => o.status === "done");
-      const cancelled = list.filter((o) => o.status === "cancelled");
+      const cancelled = list.filter((o) => isCanceledStatus(o.status));
       
       let filteredList = [];
       let emptyMessage = "No active orders.";
@@ -1148,7 +1167,7 @@
           emptyMessage = "No completed orders.";
       } else if (currentFilter === 'cancelled') {
           filteredList = cancelled.sort((a, b) => b.createdAt - a.createdAt);
-          emptyMessage = "No cancelled orders.";
+          emptyMessage = "No canceled orders.";
       } else {
           // ACTIVE FILTER: Prioritize tickets first, then by oldest (createdAt)
           filteredList = active.sort((a, b) => {
@@ -1180,11 +1199,12 @@
         }
         
         filteredList.forEach((o) => {
+          const statusValue = normalizeStatus(o.status);
           const isSelected = o.orderNumber === selectedOrderNumber;
-          const isActiveStatus = (o.status === "new" || o.status === "in-progress" || o.status === "ready");
+          const isActiveStatus = (statusValue === "new" || statusValue === "in-progress" || statusValue === "ready");
 
           const b = document.createElement("div");
-          b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
+          b.className = `bubble ${statusValue}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
           
           b.setAttribute("draggable", true);
@@ -1210,10 +1230,10 @@
           };
 
           const statusText =
-            o.status === "new" ? "NEW" :
-            o.status === "in-progress" ? "IN PROGRESS" : 
-            o.status === "ready" ? "READY" :
-            o.status === "done" ? "COMPLETED" : "CANCELLED";
+            statusValue === "new" ? "NEW" :
+            statusValue === "in-progress" ? "IN PROGRESS" :
+            statusValue === "ready" ? "READY" :
+            statusValue === "done" ? "COMPLETED" : "CANCELED";
 
           const itemCountText =
             o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
