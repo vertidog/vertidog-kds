@@ -25,9 +25,9 @@
       --time-default: #1f2937;  /* Dark text color for timer */
 
       /* User configurable: Controls how many rows the KDS uses */
-      --grid-rows: 1; 
+      --grid-rows: 1;
       /* Fixed width for a card when in a single row or narrow grid */
-      --card-width: 420px; 
+      --card-width: 360px;
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -246,14 +246,48 @@
     .bubble-top-bar {
         background: var(--new); /* Default blue, will change based on time */
         color: white;
-        padding: 0.7rem 1rem;
+        padding: 0.55rem 0.85rem;
         border-radius: var(--radius) var(--radius) 0 0;
         display: flex;
         justify-content: space-between;
+        gap: 0.75rem;
         align-items: center;
         font-weight: 700;
-        text-transform: uppercase;
         font-size: 0.9rem;
+    }
+
+    .bubble-top-left {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .order-number-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.95rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .dining-chip, .status-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.18rem 0.55rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.2);
+        color: #fff;
+        font-size: 0.82rem;
+        letter-spacing: 0.03em;
+    }
+
+    .bubble-top-right {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin-left: auto;
     }
 
     /* Time Coloring */
@@ -263,10 +297,10 @@
 
     .bubble-body {
         flex: 1;
-        padding: 1rem 1rem 0.95rem;
+        padding: 0.85rem 0.9rem 0.85rem;
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 0.65rem;
     }
     
     .recall-btn {
@@ -285,25 +319,6 @@
     }
     .recall-btn:hover { background: #8e44ad; }
     
-    .prioritize-btn {
-        background: none;
-        border: 1px solid white;
-        color: white;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        font-weight: 600;
-        font-size: 0.75rem;
-        cursor: pointer;
-        transition: background 0.2s, border-color 0.2s;
-        text-transform: uppercase;
-        margin-left: 0.5rem;
-    }
-    .prioritize-btn.is-prioritized {
-        background: white;
-        color: var(--time-critical);
-        border-color: var(--time-critical);
-    }
-
     .bubble-status {
       font-size: 0.85rem;
       padding: 0.15rem 0.5rem;
@@ -315,48 +330,48 @@
 
     .bubble-header {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
-      gap: 1rem;
-      padding-right: 0.5rem;
+      gap: 0.75rem;
     }
 
-    .bubble-number {
-      font-size: 3.4rem;
-      font-weight: 900;
-      line-height: 1;
+    .bubble-header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
     }
 
     .bubble-metas {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      gap: 0.2rem;
+      gap: 0.35rem;
       text-align: right;
-      min-width: 120px;
+      min-width: 100px;
       flex: 0 0 auto;
     }
     .bubble-timer {
-      font-size: 1.35rem;
-      font-weight: 900;
+      font-size: 1.05rem;
+      font-weight: 800;
       color: var(--time-default); /* New dark color for timer text */
       line-height: 1.05;
     }
     .bubble-meta {
-      font-size: 1.0rem;
+      font-size: 0.9rem;
       color: var(--muted);
       font-weight: 650;
+      letter-spacing: 0.01em;
     }
 
     .bubble-items {
       flex: 1;
       border-top: 1px solid rgba(148, 163, 184, 0.35);
-      padding-top: 0.75rem;
+      padding-top: 0.6rem;
       display: flex;
       flex-direction: column;
       gap: 0.55rem;
-      overflow-y: auto; 
-      padding-bottom: 0.25rem;
+      overflow-y: auto;
+      padding-bottom: 0.1rem;
     }
     .bubble-items::-webkit-scrollbar { width: 4px; }
     .bubble-items::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 999px; }
@@ -391,8 +406,8 @@
       min-width: 0;
     }
     .item-name {
-      font-size: 1.15rem;
-      font-weight: 800;
+      font-size: 1.25rem;
+      font-weight: 850;
       color: var(--text);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -401,7 +416,7 @@
       transition: color 0.2s;
     }
     .item-variant {
-      font-size: 0.98rem;
+      font-size: 0.9rem;
       color: var(--muted);
       font-weight: 700;
       overflow: hidden;
@@ -412,9 +427,9 @@
         color: var(--muted);
     }
     .item-qty {
-      font-size: 1.05rem;
-      font-weight: 900;
-      padding: 0.12rem 0.5rem;
+      font-size: 0.95rem;
+      font-weight: 800;
+      padding: 0.12rem 0.45rem;
       border-radius: 999px;
       border: 1px solid rgba(168, 85, 247, 0.35);
       background: rgba(168, 85, 247, 0.12);
@@ -441,18 +456,64 @@
 
     .item-mods {
       margin-top: 0.15rem;
-      font-size: 0.98rem; 
+      font-size: 0.98rem;
       color: var(--ready); /* Green for Modifiers */
       font-style: italic;
       line-height: 1.2;
       padding-left: 0.85rem;
       border-left: 3px solid rgba(34, 197, 94, 0.45);
     }
+    .bubble-notes {
+      margin-top: 0.4rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.04);
+      border: 1px dashed rgba(148, 163, 184, 0.4);
+      font-size: 0.95rem;
+      color: var(--text);
+      line-height: 1.4;
+    }
     .items-more {
       margin-top: 0.35rem;
       font-size: 1.0rem;
       color: var(--muted);
       font-weight: 650;
+    }
+
+    .priority-star-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        font-size: 1.15rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .priority-star-btn:hover { filter: brightness(1.05); }
+    .priority-star-btn.is-prioritized {
+        background: #fbbf24;
+        color: #1f2937;
+        border-color: #fbbf24;
+        box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.35);
+    }
+    .priority-star-btn.passive-star { pointer-events: none; }
+
+    .order-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .order-count-meta {
+        font-size: 0.9rem;
+        color: var(--muted);
+        font-weight: 700;
     }
 
     /* Status Specific Styles */
@@ -949,6 +1010,8 @@
         items: updatedItems,
         orderId: data.orderId || existing.orderId,
         isPrioritized: data.isPrioritized ?? existing.isPrioritized ?? false, // Initialize/update priority
+        diningOption: data.diningOption || data.fulfillmentType || data.serviceType || existing.diningOption || null,
+        notes: data.notes || data.note || data.comments || existing.notes || null,
       };
 
       if (normalizedStatus === "done" && selectedOrderNumber === orderNumber) {
@@ -1231,28 +1294,41 @@
              ? '' 
              : `<button class="recall-btn" onclick="window.recallOrder('${o.orderNumber}', event)">RECALL</button>`;
           
-          const priorityIcon = o.isPrioritized ? '⚠️' : '';
-          const priorityBtn = (o.status === 'new' || o.status === 'in-progress')
-             ? `<button class="prioritize-btn ${o.isPrioritized ? 'is-prioritized' : ''}" onclick="window.togglePriority('${o.orderNumber}', event)">${o.isPrioritized ? 'PRIORITIZED' : 'PRIORITIZE'}</button>`
+          const priorityDisplay = o.isPrioritized
+             ? `<span class="priority-star-btn is-prioritized passive-star">★</span>`
              : '';
 
-          const timerHtml = currentFilter === 'active' 
-              ? `<span class="bubble-timer">${formatTimeElapsed(o.createdAt)}</span>` 
+          const priorityBtn = (o.status === 'new' || o.status === 'in-progress')
+             ? `<button class="priority-star-btn ${o.isPrioritized ? 'is-prioritized' : ''}" aria-label="Toggle priority" onclick="window.togglePriority('${o.orderNumber}', event)">★</button>`
+             : priorityDisplay;
+
+          const timerHtml = currentFilter === 'active'
+              ? `${formatTimeElapsed(o.createdAt)}`
               : '';
+
+          const diningOption = escapeHtml(o.diningOption || "");
+          const notes = escapeHtml(o.notes || "");
           
           const itemsHtml = renderItemsHtml(o.orderNumber, o.items, 99);
           
           b.innerHTML = `
             <div class="bubble-top-bar ${o.status !== 'ready' ? o.status : ''}">
-                <div>${statusText} ${priorityIcon} ${priorityBtn}</div>
-                <div>${timerHtml}</div>
+              <div class="bubble-top-left">
+                <div class="order-number-tag">#${escapeHtml(o.orderNumber)} ${priorityBtn}</div>
+                <div class="order-meta-row">
+                  ${diningOption ? `<span class=\\"dining-chip\\">${diningOption}</span>` : ``}
+                  <span class="status-chip">${statusText}</span>
+                </div>
+              </div>
+              <div class="bubble-top-right">
+                ${timerHtml ? `<span class=\\"bubble-timer\\">${timerHtml}</span>` : ``}
+              </div>
             </div>
 
             <div class="bubble-body">
                 <div class="bubble-header">
-                  <div>
-                    <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
-                    <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
+                  <div class="bubble-header-left">
+                    <div class="bubble-meta order-count-meta">${escapeHtml(itemCountText)}</div>
                   </div>
                   <div class="bubble-metas">
                     ${recallButtonHtml}
@@ -1262,6 +1338,7 @@
                 <div class="bubble-items">
                   ${itemsHtml}
                 </div>
+                ${notes ? `<div class=\\"bubble-notes\\">${notes}</div>` : ``}
             </div>
           `;
 
