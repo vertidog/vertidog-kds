@@ -17,9 +17,11 @@
       --accent: #a855f7;
       --drag-hover-color: rgba(168, 85, 247, 0.22);
       --radius: 16px;
-      /* Define the columns/rows for the grid layout */
-      --grid-cols: 4; 
-      --grid-rows: 3;
+      
+      /* User configurable: Controls how many rows the KDS uses */
+      --grid-rows: 1; 
+      /* Fixed width for a card when in a single row or narrow grid */
+      --card-width: 420px; 
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -121,41 +123,80 @@
       background: #22c55e;
       box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
     }
+
+    /* Options Button */
+    .options-btn {
+        background: none;
+        border: none;
+        color: var(--muted);
+        font-size: 1.6rem;
+        cursor: pointer;
+        transition: color 0.2s;
+        padding: 0 0.5rem;
+        line-height: 1;
+    }
+    .options-btn:hover { color: var(--accent); }
     
     /* -----------------------------
-      MAIN PAGER CONTAINER
+      MAIN SCROLLER & CARD LAYOUT
     --------------------------------*/
     main {
       flex: 1;
       padding: 0.9rem;
       display: flex;
-      overflow-x: scroll; /* Enable horizontal scrolling */
-      scroll-snap-type: x mandatory; /* Force snapping to pages */
-      scroll-behavior: smooth; /* Smooth scrolling between pages */
-      min-height: 220px;
-      gap: 0; /* Pages are side-by-side */
-    }
-    /* Hide scrollbar on main container */
-    main::-webkit-scrollbar { display: none; }
-    main { -ms-overflow-style: none; scrollbar-width: none; } 
-
-    /* Page container (snaps to screen width) */
-    .page {
-      flex: 0 0 100%; /* Each page takes up 100% of the viewport width */
-      scroll-snap-align: start; /* Snap to the start of the page */
-      padding-right: 0.9rem; /* Restore gap lost by setting main gap to 0 */
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* Grid inside the page */
-    .bubble-grid {
-      display: grid;
-      grid-template-columns: repeat(var(--grid-cols), 1fr);
-      grid-template-rows: repeat(var(--grid-rows), 1fr);
+      flex-direction: row; 
       gap: 0.9rem;
-      width: 100%;
-      height: 100%;
+      overflow-x: scroll; 
+      overflow-y: hidden; 
+      min-height: 220px;
+      padding-bottom: 0.9rem;
+      -webkit-overflow-scrolling: touch; 
+    }
+    
+    main::-webkit-scrollbar { height: 12px; }
+    main::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.7); border-radius: 6px; }
+    main::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 6px; }
+    main::-webkit-scrollbar-thumb:hover { background: #8e44ad; }
+
+    /* Single-row Mode (Default: --grid-rows: 1) */
+    .bubble {
+      position: relative;
+      flex: 0 0 var(--card-width);
+      height: 100%; 
+      
+      /* Multi-row Mode: Grid styling */
+      /* These properties dynamically shift the card flow when --grid-rows > 1 */
+      /* Order cards vertically first, then wrap horizontally */
+      align-self: flex-start;
+      margin-bottom: calc(var(--grid-rows) * 0.9rem); 
+    }
+
+    /* Apply Grid container properties when multi-row is active */
+    .multi-row-container {
+        display: grid;
+        grid-auto-flow: column; /* Flow columns first (horizontal scrolling) */
+        grid-template-rows: repeat(var(--grid-rows), 1fr); /* Define number of rows */
+        gap: 0.9rem;
+        height: 100%;
+        /* Ensure the container stretches wide enough to contain all items */
+        width: max-content; 
+    }
+
+    /* Override flex for multi-row items */
+    .multi-row-container .bubble {
+        flex: unset;
+        width: var(--card-width);
+        height: 100%;
+        margin-bottom: 0;
+    }
+    
+    /* Empty State for the whole main area */
+    .empty-state-wrapper {
+        flex: 0 0 100%; 
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
 
     .empty-state {
@@ -172,19 +213,10 @@
       flex: 1;
     }
 
-    /* DRAG STYLES */
-    .drag-over-active {
-      outline: 4px dashed var(--accent);
-      background-color: var(--drag-hover-color);
-      border-radius: var(--radius);
-    }
-    .dragging { opacity: 0.4; }
-
-    /* CARD */
+    /* CARD STYLES (Rest of card styling remains the same) */
+    /* ... (CSS for bubble, bubble-status, bubble-header, bubble-items, etc.) ... */
     .bubble {
       position: relative;
-      width: 100%;
-      height: 100%; /* Fills the grid cell */
       border-radius: var(--radius);
       cursor: grab;
       border: 2px solid transparent;
@@ -205,7 +237,6 @@
       transform: scale(1.01);
     }
     
-    /* New: Recall Button Style */
     .recall-btn {
         background: var(--accent);
         color: white;
@@ -242,7 +273,7 @@
     }
 
     .bubble-number {
-      font-size: clamp(2.8rem, 4vw, 3.4rem);
+      font-size: 3.4rem;
       font-weight: 900;
       line-height: 1;
     }
@@ -275,7 +306,7 @@
       display: flex;
       flex-direction: column;
       gap: 0.55rem;
-      overflow-y: auto; /* Scrollable items list inside the card */
+      overflow-y: auto; 
       padding-bottom: 0.25rem;
     }
     .bubble-items::-webkit-scrollbar { width: 4px; }
@@ -331,22 +362,18 @@
       box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0,0,0,0.45);
     }
     .bubble.new .bubble-status { background: var(--new); color: #fff; }
-
     .bubble.in-progress {
       background: var(--card-bg);
       border-color: var(--progress);
       box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0,0,0,0.45);
     }
     .bubble.in-progress .bubble-status { background: var(--progress); color: #fff; }
-
     .bubble.ready {
       background: radial-gradient(circle at center, rgba(34, 197, 94, 0.22), var(--card-bg) 70%);
       border-color: var(--ready);
       box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0,0,0,0.45);
     }
     .bubble.ready .bubble-status { background: var(--ready); color: var(--card-bg); }
-
-    /* DONE Status */
     .bubble.done {
       background: #111827;
       border-color: #334155;
@@ -357,8 +384,6 @@
       border: 1px solid rgba(148, 163, 184, 0.30);
       color: #e5e7eb;
     }
-
-    /* CANCELLED Status */
     .bubble.cancelled {
       background: #111827;
       border-color: var(--cancel);
@@ -366,49 +391,67 @@
     }
     .bubble.cancelled .bubble-status { background: var(--cancel); color: #fff; }
     
-    /* -----------------------------
-      PAGINATION DOTS
-    --------------------------------*/
-    #pagination-dots {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 0.5rem 0;
-        gap: 0.75rem;
-        background: rgba(15, 23, 42, 0.9);
-        border-top: 1px solid rgba(148, 163, 184, 0.25);
-    }
-    .dot-indicator {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background-color: var(--muted);
-        opacity: 0.5;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    .dot-indicator.active {
-        width: 12px;
-        height: 12px;
-        background-color: var(--accent);
-        opacity: 1;
-        box-shadow: 0 0 8px var(--accent);
-    }
-
-    @media (max-width: 1024px) {
-        :root {
-            --grid-cols: 3;
-            --grid-rows: 3;
-        }
-    }
-
     @media (max-width: 860px) {
       header .subtitle { display: none; }
       :root {
-            --grid-cols: 2;
-            --grid-rows: 2;
+            --card-width: 320px; 
         }
     }
+
+    /* -----------------------------
+      MODAL STYLES
+    --------------------------------*/
+    .modal {
+        display: none; 
+        position: fixed; 
+        z-index: 1000; 
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.4); 
+        justify-content: center;
+        align-items: center;
+    }
+    .modal.show { display: flex; }
+
+    .modal-content {
+        background-color: var(--card-bg);
+        padding: 2rem;
+        border-radius: var(--radius);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.7);
+        width: 300px;
+        text-align: center;
+        border: 1px solid var(--accent);
+    }
+    .modal-content h3 {
+        margin-top: 0;
+        color: var(--text);
+    }
+    .row-option-btn {
+        display: block;
+        width: 100%;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+        border: 2px solid var(--muted);
+        border-radius: 8px;
+        background-color: #1f2937;
+        color: var(--text);
+        font-size: 1.1rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .row-option-btn:hover {
+        background-color: #374151;
+    }
+    .row-option-btn.selected {
+        border-color: var(--accent);
+        background-color: var(--accent);
+        color: white;
+        font-weight: bold;
+        box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+    }
+
   </style>
 </head>
 
@@ -423,9 +466,12 @@
       <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
       <div class="tab-pill" data-filter="cancelled" onclick="setFilter('cancelled')">CANCELLED (<span id="cancelled-count">0</span>)</div>
     </div>
-    <div class="status-pill" id="connection-status">
-      <span class="dot"></span>
-      <span>Connected</span>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <div class="status-pill" id="connection-status">
+            <span class="dot"></span>
+            <span>Connected</span>
+        </div>
+        <button class="options-btn" onclick="toggleOptionsModal()">⚙️</button>
     </div>
   </header>
 
@@ -435,8 +481,14 @@
         ondrop="handleDrop(event, 'active')">
     </main>
   
-  <div id="pagination-dots">
+  <div id="options-modal" class="modal" onclick="if(event.target.id === 'options-modal') toggleOptionsModal()">
+    <div class="modal-content">
+        <h3>Display Rows</h3>
+        <button class="row-option-btn" data-rows="1" onclick="setRows(1)">1 Row (Max Detail)</button>
+        <button class="row-option-btn" data-rows="2" onclick="setRows(2)">2 Rows (Medium Density)</button>
+        <button class="row-option-btn" data-rows="3" onclick="setRows(3)">3 Rows (Max Density)</button>
     </div>
+  </div>
 
 
   <audio id="ready-sound" preload="auto">
@@ -452,7 +504,7 @@
     const bubbleContainer = document.getElementById("bubble-container");
     const connectionStatus = document.getElementById("connection-status");
     const readySound = document.getElementById("ready-sound");
-    const paginationDots = document.getElementById("pagination-dots");
+    const optionsModal = document.getElementById("options-modal");
     
     // Elements for the new header pills
     const activeCountEl = document.getElementById("active-count");
@@ -463,21 +515,19 @@
     let socket;
     let selectedOrderNumber = null;
     let currentFilter = 'active';
+    let currentRows = 1; // Default to 1 row
 
-    // NEW: Long Press and Interaction state
+    // Long Press and Interaction state
     let pressTimer = null;
     let isLongPress = false;
     const LONG_PRESS_THRESHOLD = 700; // ms
-    
-    // Pagination state
-    let cardsPerPage = 0;
-    let currentPage = 0;
-    let totalPages = 0;
 
     // TTS + announcement queue
     let preferredVoice = null;
     let announcementQueue = [];
     let isAnnouncing = false;
+
+    // --- Utility Functions ---
 
     function escapeHtml(str) {
       return String(str ?? "")
@@ -496,9 +546,46 @@
       if (minutes > 0) return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
       return `${seconds}s`;
     }
+    
+    // --- Options Modal Logic ---
+    window.toggleOptionsModal = function() {
+        optionsModal.classList.toggle('show');
+        // Update selection state when showing
+        if(optionsModal.classList.contains('show')) {
+            document.querySelectorAll('.row-option-btn').forEach(btn => {
+                btn.classList.remove('selected');
+                if (parseInt(btn.dataset.rows) === currentRows) {
+                    btn.classList.add('selected');
+                }
+            });
+        }
+    }
+
+    window.setRows = function(rows) {
+        currentRows = rows;
+        // Update CSS variable
+        document.documentElement.style.setProperty('--grid-rows', rows);
+        
+        // Save to local storage (optional, for persistence)
+        localStorage.setItem('kdsRows', rows);
+        
+        // Re-render the orders with the new layout
+        render();
+        toggleOptionsModal();
+    }
+    
+    function loadInitialRows() {
+        const savedRows = localStorage.getItem('kdsRows');
+        if (savedRows) {
+            currentRows = parseInt(savedRows);
+            document.documentElement.style.setProperty('--grid-rows', currentRows);
+        }
+    }
+    loadInitialRows();
+
 
     /* -----------------------------
-      TTS SETUP
+      TTS SETUP (Unchanged)
     --------------------------------*/
     function loadVoices() {
       if (!("speechSynthesis" in window)) return;
@@ -553,7 +640,7 @@
     }
 
     /* -----------------------------
-      CONNECT TO WEBSOCKET
+      WEBSOCKET & MESSAGING (Unchanged)
     --------------------------------*/
     function setConnectionState(connected) {
       const dot = connectionStatus.querySelector(".dot");
@@ -592,9 +679,6 @@
       }
     }
 
-    /* -----------------------------
-      HANDLE INCOMING MESSAGES
-    --------------------------------*/
     function handleMessage(msg) {
       switch (msg.type) {
         case "NEW_ORDER":
@@ -616,31 +700,21 @@
     }
     
     /* -----------------------------
-      FILTERING LOGIC
+      FILTERING, DRAG, PRESS LOGIC (Largely Unchanged)
     --------------------------------*/
     window.setFilter = function(newFilter) {
       if (currentFilter === newFilter) return;
-
       currentFilter = newFilter;
-      currentPage = 0; // Reset page on filter change
-      
-      // Highlight pill
       document.querySelectorAll('.tab-pill').forEach(pill => {
         pill.classList.remove('active-tab');
         if (pill.dataset.filter === newFilter) {
           pill.classList.add('active-tab');
         }
       });
-
-      // Clear selection when switching views
       selectedOrderNumber = null;
       render();
     }
 
-
-    /* -----------------------------
-      DRAG & DROP LOGIC
-    --------------------------------*/
     function handleDragStart(event) {
       const orderNumber = event.currentTarget?.dataset?.order;
       event.dataTransfer.setData("text/plain", orderNumber);
@@ -653,14 +727,12 @@
 
     function handleDragOver(event, targetType) {
       event.preventDefault();
-      // Only show drag-over effect if we are in the 'active' view
       if (currentFilter === 'active') {
           bubbleContainer.classList.add(`drag-over-${targetType}`);
       }
     }
 
     function handleDragLeave(event, targetType) {
-      // Only remove drag-over effect if we are in the 'active' view
       if (currentFilter === 'active') {
           bubbleContainer.classList.remove(`drag-over-${targetType}`);
       }
@@ -669,45 +741,31 @@
     function handleDrop(event, targetType) {
       event.preventDefault();
       const orderNumber = event.dataTransfer.getData("text/plain");
-
       bubbleContainer.classList.remove("drag-over-active");
-
       if (!orderNumber || !orders[orderNumber]) return;
       
       const o = orders[orderNumber];
       
-      // Dropping onto the main grid only causes status change if dropped order is Done/Cancelled
       if (o.status === "done" || o.status === "cancelled") {
         window.recallOrder(orderNumber, event); 
       } else {
          return; 
       }
-
       selectedOrderNumber = orderNumber;
       render();
     }
 
-    /* -----------------------------
-      LONG PRESS / CANCEL LOGIC
-    --------------------------------*/
     function handleLongPressStart(event) {
-      // Prevent long press if drag is detected early
       if (event.dataTransfer) return; 
-
-      // Only allow long press on active orders
       const orderNumber = event.currentTarget.dataset.order;
       const o = orders[orderNumber];
       if (!o || (o.status === "done" || o.status === "cancelled")) return;
 
-      // Clear any existing timer
       isLongPress = false;
       clearTimeout(pressTimer);
-      
-      // Prevent text selection during long press attempt
       event.currentTarget.style.userSelect = 'none';
 
       pressTimer = setTimeout(() => {
-          // Long press detected
           isLongPress = true;
           pressTimer = null; 
           event.currentTarget.style.userSelect = 'auto';
@@ -718,48 +776,33 @@
     function handlePressEnd(event) {
       clearTimeout(pressTimer);
       pressTimer = null;
-      
-      // Reset user-select style
       if (event.currentTarget) {
           event.currentTarget.style.userSelect = 'auto';
       }
-      
-      // If a long press was triggered, prevent the subsequent 'click' event from firing cycleStatus.
       if (isLongPress) {
           event.preventDefault(); 
           event.stopPropagation();
-          // Don't reset isLongPress here; let cycleStatus handle it on click prevention
       }
     }
 
     function confirmCancel(orderNumber) {
       const confirmed = window.confirm(`Are you sure you want to CANCEL order ${orderNumber}? \n\nThis will remove it from the active list.`);
-
       if (confirmed) {
           cancelOrder(orderNumber);
       } else {
-          isLongPress = false; // Reset flag if cancellation is aborted
+          isLongPress = false;
       }
     }
 
     window.cancelOrder = function(orderNumber) {
       const o = orders[orderNumber];
       if (!o) return;
-      
       o.status = "cancelled";
-      // Send message to server to persist the change
       sendMessage({ type: "ORDER_CANCELLED", orderNumber: orderNumber });
-      
       selectedOrderNumber = null;
-      // Stay on current filter, but render will move it out of 'active'
       render();
-      // If we cancelled the last order on a page, try to move back
-      if (currentPage > 0) scrollToPage(currentPage - 1);
     }
 
-    /* -----------------------------
-      ORDER MANAGEMENT
-    --------------------------------*/
     function addOrUpdate(orderNumber, status, data = {}) {
       const existing = orders[orderNumber] || {};
       orders[orderNumber] = {
@@ -792,19 +835,15 @@
     }
 
     window.cycleStatus = function(orderNumber) {
-      // If long press was detected, prevent tap-to-cycle
       if (isLongPress) {
-          isLongPress = false; // Consume the flag
+          isLongPress = false;
           return;
       }
       
       const o = orders[orderNumber];
       selectedOrderNumber = orderNumber;
 
-      if (!o) return render();
-
-      // Only allow status cycling for active orders
-      if (o.status === "cancelled" || o.status === "done") {
+      if (!o || o.status === "cancelled" || o.status === "done") {
         return render();
       }
 
@@ -821,9 +860,7 @@
       render();
     }
     
-    // NEW: Recall function to bring completed/cancelled orders back to active
     window.recallOrder = function(orderNumber, event) {
-      // Prevent card click highlight/select action when button is pressed
       if (event) event.stopPropagation(); 
       
       const o = orders[orderNumber];
@@ -833,7 +870,6 @@
       sendMessage({ type: "ORDER_REACTIVATED", orderNumber: orderNumber });
       
       selectedOrderNumber = orderNumber;
-      // Switch to active filter after recall
       setFilter('active'); 
       render();
     }
@@ -849,7 +885,6 @@
     }
 
     function updateTimers() {
-      // Only update timers if we are viewing the 'active' list
       if (currentFilter === 'active') {
         document.querySelectorAll(".bubble").forEach((bubbleEl) => {
           const orderNumber = bubbleEl.dataset.order;
@@ -862,60 +897,14 @@
     setInterval(updateTimers, 1000);
     
     /* -----------------------------
-      PAGINATION CONTROL
-    --------------------------------*/
-    function scrollToPage(pageIndex) {
-        const pageElement = document.getElementById(`page-${pageIndex}`);
-        if (pageElement) {
-            bubbleContainer.scrollTo({
-                left: pageElement.offsetLeft,
-                behavior: 'smooth'
-            });
-            currentPage = pageIndex;
-            updatePaginationDots();
-        }
-    }
-
-    function updatePaginationDots() {
-        paginationDots.innerHTML = '';
-        if (totalPages > 1 && currentFilter === 'active') {
-            for (let i = 0; i < totalPages; i++) {
-                const dot = document.createElement('div');
-                dot.className = `dot-indicator${i === currentPage ? ' active' : ''}`;
-                dot.onclick = () => scrollToPage(i);
-                paginationDots.appendChild(dot);
-            }
-        }
-        // Hide pagination if not active or only one page
-        paginationDots.style.display = (totalPages > 1 && currentFilter === 'active') ? 'flex' : 'none';
-    }
-
-    bubbleContainer.addEventListener('scroll', () => {
-        // Calculate the current page index based on scroll position
-        const scrollLeft = bubbleContainer.scrollLeft;
-        const pageIndex = Math.round(scrollLeft / bubbleContainer.clientWidth);
-        if (pageIndex !== currentPage) {
-            currentPage = pageIndex;
-            updatePaginationDots();
-        }
-    });
-
-    // Recalculate cards per page and update layout on resize
-    window.addEventListener('resize', () => {
-        // Debounce or recalculate on resize is important for responsive grid
-        render(); 
-        scrollToPage(currentPage); // Re-align to current page
-    });
-
-    /* -----------------------------
-      RENDERING
+      RENDERING (Updated for Dynamic Row Layout)
     --------------------------------*/
     function renderItemsHtml(items = [], maxItems = 99) {
       if (!Array.isArray(items) || items.length === 0) {
         return `<div class="items-more">No item details.</div>`;
       }
 
-      const slice = items.slice(0, maxItems);
+      const slice = items.slice(0, maxItems); 
       const rows = slice.map((item) => {
         const name = escapeHtml(item?.name || "Item");
         const qty = Number(item?.quantity ?? 1);
@@ -943,147 +932,117 @@
 
     function render() {
       const list = Object.values(orders).sort((a, b) => a.createdAt - b.createdAt);
-
-      // Group orders for display and counting
       const active = list.filter((o) => o.status !== "done" && o.status !== "cancelled");
       const done = list.filter((o) => o.status === "done");
       const cancelled = list.filter((o) => o.status === "cancelled");
       
-      // Determine which list to display based on the current filter
       let filteredList = [];
       let emptyMessage = "No active orders.";
       
       if (currentFilter === 'done') {
-          filteredList = done.sort((a, b) => b.createdAt - a.createdAt); // Newest first
+          filteredList = done.sort((a, b) => b.createdAt - a.createdAt);
           emptyMessage = "No completed orders.";
       } else if (currentFilter === 'cancelled') {
-          filteredList = cancelled.sort((a, b) => b.createdAt - a.createdAt); // Newest first
+          filteredList = cancelled.sort((a, b) => b.createdAt - a.createdAt);
           emptyMessage = "No cancelled orders.";
-      } else { // 'active'
+      } else {
           filteredList = active;
           emptyMessage = "No active orders.";
       }
 
-
-      // Update counts in the header pills
       activeCountEl.textContent = active.length;
       doneCountEl.textContent = done.length;
       cancelledCountEl.textContent = cancelled.length;
 
       bubbleContainer.innerHTML = "";
       
-      // Determine the number of cards that fit per page for 'active' view
-      const style = getComputedStyle(document.documentElement);
-      const cols = parseInt(style.getPropertyValue('--grid-cols')) || 4;
-      const rows = parseInt(style.getPropertyValue('--grid-rows')) || 3;
-      cardsPerPage = cols * rows;
-
       if (filteredList.length === 0) {
-        const emptyStateEl = document.createElement('div');
-        emptyStateEl.className = 'page';
-        emptyStateEl.innerHTML = `<div class="empty-state"><div>${emptyMessage}</div></div>`;
-        bubbleContainer.appendChild(emptyStateEl);
-        totalPages = 0;
+        const emptyStateWrapper = document.createElement('div');
+        emptyStateWrapper.className = 'empty-state-wrapper';
+        emptyStateWrapper.innerHTML = `<div class="empty-state"><div>${emptyMessage}</div></div>`;
+        bubbleContainer.appendChild(emptyStateWrapper);
+        // Reset container classes for empty state
+        bubbleContainer.classList.remove('multi-row-container'); 
       } else {
-        // --- PAGINATION LOGIC ---
-        totalPages = Math.ceil(filteredList.length / cardsPerPage);
-        
-        // Ensure currentPage is valid after filtering/sizing changes
-        currentPage = Math.min(currentPage, totalPages - 1);
-        currentPage = Math.max(0, currentPage);
-        
-        // Render pages
-        for (let i = 0; i < totalPages; i++) {
-            const page = document.createElement('div');
-            page.className = 'page';
-            page.id = `page-${i}`;
-            
-            const grid = document.createElement('div');
-            grid.className = 'bubble-grid';
-
-            const pageOrders = filteredList.slice(i * cardsPerPage, (i + 1) * cardsPerPage);
-
-            pageOrders.forEach((o) => {
-              const isSelected = o.orderNumber === selectedOrderNumber;
-              const isActiveStatus = (o.status === "new" || o.status === "in-progress" || o.status === "ready");
-
-              const b = document.createElement("div");
-              b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
-              b.dataset.order = o.orderNumber;
-              
-              b.setAttribute("draggable", true);
-              b.ondragstart = handleDragStart;
-              b.ondragend = handleDragEnd;
-              
-              // Long Press Handlers
-              if (isActiveStatus) {
-                  b.onmousedown = handleLongPressStart;
-                  b.onmouseup = handlePressEnd;
-                  b.onmouseleave = handlePressEnd;
-                  b.ontouchstart = handleLongPressStart;
-                  b.ontouchend = handlePressEnd;
-                  b.ontouchcancel = handlePressEnd;
-              }
-              
-              // Click handler
-              b.onclick = (e) => {
-                  if (isActiveStatus) {
-                      window.cycleStatus(o.orderNumber); 
-                  } else {
-                      // Click on passive card is just for highlighting/selecting
-                      selectedOrderNumber = o.orderNumber; 
-                      render(); 
-                  }
-              };
-
-              const statusText =
-                o.status === "new" ? "NEW" :
-                o.status === "in-progress" ? "IN PROGRESS" : 
-                o.status === "ready" ? "READY" :
-                o.status === "done" ? "COMPLETED" : "CANCELLED";
-
-              const itemCountText =
-                o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
-
-              // Decide whether to show the recall button
-              const recallButtonHtml = isActiveStatus 
-                 ? '' 
-                 : `<button class="recall-btn" onclick="window.recallOrder('${o.orderNumber}', event)">RECALL</button>`;
-              
-              // The timer is only for active orders
-              const timerHtml = currentFilter === 'active' ? `<div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div>` : '';
-              const itemsHtml = currentFilter === 'active' ? renderItemsHtml(o.items, 99) : `<div class="items-more">${itemCountText}</div>`;
-              
-              b.innerHTML = `
-                <div class="bubble-header">
-                  <div>
-                    <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
-                    <div class="bubble-status">${statusText}</div>
-                  </div>
-                  <div class="bubble-metas">
-                    ${timerHtml}
-                    ${recallButtonHtml}
-                  </div>
-                </div>
-
-                <div class="bubble-items">
-                  ${itemsHtml}
-                </div>
-              `;
-
-              grid.appendChild(b);
-            });
-            
-            page.appendChild(grid);
-            bubbleContainer.appendChild(page);
+        // Prepare container for multi-row view if needed
+        if (currentRows > 1) {
+            bubbleContainer.classList.add('multi-row-container');
+        } else {
+            bubbleContainer.classList.remove('multi-row-container');
         }
         
-        // Scroll to the current page after rendering
-        scrollToPage(currentPage);
+        filteredList.forEach((o) => {
+          const isSelected = o.orderNumber === selectedOrderNumber;
+          const isActiveStatus = (o.status === "new" || o.status === "in-progress" || o.status === "ready");
+
+          const b = document.createElement("div");
+          b.className = `bubble ${o.status}${isSelected ? " selected" : ""}`;
+          b.dataset.order = o.orderNumber;
+          
+          b.setAttribute("draggable", true);
+          b.ondragstart = handleDragStart;
+          b.ondragend = handleDragEnd;
+          
+          // Long Press Handlers
+          if (isActiveStatus) {
+              b.onmousedown = handleLongPressStart;
+              b.onmouseup = handlePressEnd;
+              b.onmouseleave = handlePressEnd;
+              b.ontouchstart = handleLongPressStart;
+              b.ontouchend = handlePressEnd;
+              b.ontouchcancel = handlePressEnd;
+          }
+          
+          // Click handler
+          b.onclick = (e) => {
+              if (isActiveStatus) {
+                  window.cycleStatus(o.orderNumber); 
+              } else {
+                  selectedOrderNumber = o.orderNumber; 
+                  render(); 
+              }
+          };
+
+          const statusText =
+            o.status === "new" ? "NEW" :
+            o.status === "in-progress" ? "IN PROGRESS" : 
+            o.status === "ready" ? "READY" :
+            o.status === "done" ? "COMPLETED" : "CANCELLED";
+
+          const itemCountText =
+            o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
+
+          const recallButtonHtml = isActiveStatus 
+             ? '' 
+             : `<button class="recall-btn" onclick="window.recallOrder('${o.orderNumber}', event)">RECALL</button>`;
+          
+          const timerHtml = currentFilter === 'active' ? `<div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div>` : '';
+          
+          const itemsHtml = (currentFilter === 'done' || currentFilter === 'cancelled') 
+            ? `<div class="items-more">${itemCountText}</div>` 
+            : renderItemsHtml(o.items, 99);
+          
+          b.innerHTML = `
+            <div class="bubble-header">
+              <div>
+                <div class="bubble-number">${escapeHtml(o.orderNumber)}</div>
+                <div class="bubble-status">${statusText}</div>
+              </div>
+              <div class="bubble-metas">
+                ${timerHtml}
+                <div class="bubble-meta">${escapeHtml(itemCountText)}</div>
+                ${recallButtonHtml}
+              </div>
+            </div>
+
+            <div class="bubble-items">
+              ${itemsHtml}
+            </div>
+          `;
+
+          bubbleContainer.appendChild(b);
+        });
       }
-      
-      // Update pagination dots after rendering pages
-      updatePaginationDots();
     }
 
     connect();
