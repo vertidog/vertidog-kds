@@ -99,7 +99,11 @@ function toNumberQuantity(q) {
 
 function normalizeStatus(status) {
   if (!status) return status;
-  return status === "cancelled" ? "canceled" : status;
+  const lower = String(status).toLowerCase();
+  if (lower === "cancelled" || lower === "canceled" || lower === "completed") {
+    return "done";
+  }
+  return lower;
 }
 
 function broadcast(msgObj) {
@@ -298,14 +302,14 @@ wss.on("connection", (ws) => {
         );
 
         if (orderToMark) {
-          orderToMark.status = "canceled";
+          orderToMark.status = "done";
           orders[orderToMark.orderId] = orderToMark;
           saveKDSState(); // Save state
-          
+
           console.log(`Order ${data.orderNumber} CANCELLED by KDS user.`);
 
           broadcast({
-            type: "NEW_ORDER", 
+            type: "NEW_ORDER",
             ...orderToMark,
           });
         }
@@ -440,13 +444,13 @@ app.post("/square/webhook", async (req, res) => {
     
     // Rule 1: Cancellation is the only update that can override any KDS status.
     if (stateFromSquare === "canceled" || stateFromSquare === "cancelled" || stateFromSquare === "closed" || eventTypeLower.includes("cancel")) {
-        kdsStatus = "canceled";
+        kdsStatus = "done";
     }
 
     // Rule 2 (THE CRITICAL PART): If the order already exists in our KDS memory
     // AND it has been touched (i.e., status is NOT 'new'), we NEVER override
     // the existing KDS status with a general Square update (like 'OPEN').
-    if (existing.status && existing.status !== 'new' && kdsStatus !== 'canceled') {
+    if (existing.status && existing.status !== 'new' && kdsStatus !== 'done') {
         kdsStatus = normalizeStatus(existing.status);
     }
     // --- END ULTIMATE KDS STATUS LOCK FIX ---

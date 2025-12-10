@@ -472,12 +472,12 @@
     }
     .bubble.ready .bubble-top-bar { background: var(--ready); color: var(--card-bg); }
     
-    .bubble.done, .bubble.cancelled, .bubble.canceled {
-      background: #e5e7eb; /* Light grey for completed/cancelled */
+    .bubble.done {
+      background: #e5e7eb; /* Light grey for completed */
       border-color: #94a3b8;
       opacity: 0.9;
     }
-    .bubble.done .bubble-top-bar, .bubble.cancelled .bubble-top-bar, .bubble.canceled .bubble-top-bar {
+    .bubble.done .bubble-top-bar {
       background: #94a3b8;
       color: #334155;
     }
@@ -554,7 +554,6 @@
     <div id="status-pills" class="status-tabs">
       <div class="tab-pill active-tab" data-filter="active" onclick="setFilter('active')">ACTIVE (<span id="active-count">0</span>)</div>
       <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
-      <div class="tab-pill" data-filter="cancelled" onclick="setFilter('cancelled')">CANCELED (<span id="cancelled-count">0</span>)</div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
         <div class="status-pill" id="connection-status">
@@ -597,8 +596,6 @@
     
     const activeCountEl = document.getElementById("active-count");
     const doneCountEl = document.getElementById("done-count");
-    const cancelledCountEl = document.getElementById("cancelled-count");
-
     const orders = {};
     let socket;
     let selectedOrderNumber = null;
@@ -635,11 +632,9 @@
 
     function normalizeStatus(status) {
       if (!status) return "";
-      return status === "cancelled" ? "canceled" : status;
-    }
-
-    function isCanceledStatus(status) {
-      return normalizeStatus(status) === "canceled";
+      const lower = String(status).toLowerCase();
+      if (lower === "cancelled" || lower === "canceled" || lower === "completed") return "done";
+      return lower;
     }
     
     // --- Options Modal Logic ---
@@ -820,7 +815,7 @@
     window.togglePriority = function(orderNumber, event) {
         if (event) event.stopPropagation();
         const o = orders[orderNumber];
-        if (!o || o.status === "done" || isCanceledStatus(o.status)) return;
+        if (!o || o.status === "done") return;
 
         o.isPrioritized = !o.isPrioritized;
         sendMessage({ 
@@ -876,10 +871,10 @@
       
       const o = orders[orderNumber];
       
-      if (o.status === "done" || isCanceledStatus(o.status)) {
-        window.recallOrder(orderNumber, event);
-      } else {
-         return;
+        if (o.status === "done") {
+          window.recallOrder(orderNumber, event);
+        } else {
+           return;
       }
       selectedOrderNumber = orderNumber;
       render();
@@ -889,7 +884,7 @@
       if (event.dataTransfer) return; 
       const orderNumber = event.currentTarget.dataset.order;
       const o = orders[orderNumber];
-      if (!o || o.status === "done" || isCanceledStatus(o.status)) return;
+        if (!o || o.status === "done") return;
 
       isLongPress = false;
       clearTimeout(pressTimer);
@@ -924,7 +919,7 @@
     window.cancelOrder = function(orderNumber) {
       const o = orders[orderNumber];
       if (!o) return;
-      o.status = "canceled";
+      o.status = "done";
       sendMessage({ type: "ORDER_CANCELLED", orderNumber: orderNumber });
       selectedOrderNumber = null;
       render();
@@ -956,7 +951,7 @@
         isPrioritized: data.isPrioritized ?? existing.isPrioritized ?? false, // Initialize/update priority
       };
 
-      if ((isCanceledStatus(normalizedStatus) || normalizedStatus === "done") && selectedOrderNumber === orderNumber) {
+      if (normalizedStatus === "done" && selectedOrderNumber === orderNumber) {
         selectedOrderNumber = null;
       }
     }
@@ -987,7 +982,7 @@
       const o = orders[orderNumber];
       selectedOrderNumber = orderNumber;
 
-      if (!o || isCanceledStatus(o.status) || o.status === "done") {
+      if (!o || o.status === "done") {
         return render();
       }
 
@@ -1011,7 +1006,7 @@
       if (event) event.stopPropagation(); 
       
       const o = orders[orderNumber];
-      if (!o || (o.status !== "done" && !isCanceledStatus(o.status))) return;
+      if (!o || o.status !== "done") return;
       
       // Reset items to incomplete upon recall
       o.items.forEach(item => item.completed = false); 
@@ -1026,7 +1021,7 @@
 
     function markReady(orderNumber, options = {}) {
       const o = orders[orderNumber];
-      if (!o || o.status === "done" || isCanceledStatus(o.status)) return;
+      if (!o || o.status === "done") return;
       o.status = "ready";
       selectedOrderNumber = orderNumber;
       render();
@@ -1038,7 +1033,7 @@
         if (event) event.stopPropagation(); 
         
         const o = orders[orderNumber];
-        if (!o || o.status === "ready" || o.status === "done" || isCanceledStatus(o.status)) return;
+        if (!o || o.status === "ready" || o.status === "done") return;
 
         const item = o.items[itemIndex];
         if (!item) return;
@@ -1155,9 +1150,8 @@
         })
         .sort((a, b) => a.createdAt - b.createdAt);
 
-      const active = list.filter((o) => o.status !== "done" && !isCanceledStatus(o.status));
+      const active = list.filter((o) => o.status !== "done");
       const done = list.filter((o) => o.status === "done");
-      const cancelled = list.filter((o) => isCanceledStatus(o.status));
       
       let filteredList = [];
       let emptyMessage = "No active orders.";
@@ -1165,9 +1159,6 @@
       if (currentFilter === 'done') {
           filteredList = done.sort((a, b) => b.createdAt - a.createdAt);
           emptyMessage = "No completed orders.";
-      } else if (currentFilter === 'cancelled') {
-          filteredList = cancelled.sort((a, b) => b.createdAt - a.createdAt);
-          emptyMessage = "No canceled orders.";
       } else {
           // ACTIVE FILTER: Prioritize tickets first, then by oldest (createdAt)
           filteredList = active.sort((a, b) => {
@@ -1180,8 +1171,6 @@
 
       activeCountEl.textContent = active.length;
       doneCountEl.textContent = done.length;
-      cancelledCountEl.textContent = cancelled.length;
-
       bubbleContainer.innerHTML = "";
       
       if (filteredList.length === 0) {
