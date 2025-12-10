@@ -175,7 +175,7 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "ORDER_REACTIVATED" && data.orderNumber) {
-        // RECALL: Bring order back from 'done' or 'cancelled' to 'new' 
+        // RECALL: Bring order back from 'ready' or 'cancelled' to 'new' 
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -211,11 +211,12 @@ wss.on("connection", (ws) => {
         }
       } else if (data.type === "SYNC_REQUEST") {
         // Handle explicit sync request from kitchen.html connect()
+        // --- FIX: Send ALL orders, not just active ones ---
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
-            // Only send active orders for initial KDS screen load (not ready or cancelled)
-            orders: Object.values(orders).filter(o => o.status !== 'ready' && o.status !== 'cancelled'),
+            // Send ALL orders. The client side (kitchen.html) must now filter/render them.
+            orders: Object.values(orders), 
           })
         );
       }
@@ -224,11 +225,13 @@ wss.on("connection", (ws) => {
     }
   });
 
-  // Initial sync request (only send active orders)
+  // Initial sync request
+  // --- FIX: Send ALL orders, not just active ones ---
   ws.send(
     JSON.stringify({
       type: "SYNC_STATE",
-      orders: Object.values(orders).filter(o => o.status !== 'ready' && o.status !== 'cancelled'),
+      // Send ALL orders. The client side (kitchen.html) must now filter/render them.
+      orders: Object.values(orders),
     })
   );
 
@@ -370,7 +373,7 @@ app.post("/square/webhook", async (req, res) => {
     const fulfillmentType = getFulfillmentType(fullOrder);
     
     // --- ORDER NOTE/COMMENT (NEW) ---
-    const orderNote = getOrderNote(fullOrder); // <-- EXTRACT THE NOTE
+    const orderNote = getOrderNote(fullOrder); 
 
     const merged = {
       orderId,
@@ -381,7 +384,7 @@ app.post("/square/webhook", async (req, res) => {
       items,
       stateFromSquare,
       fulfillmentType, 
-      orderNote, // <-- ADDED TO MERGED OBJECT
+      orderNote, 
     };
 
     orders[orderId] = merged;
@@ -431,7 +434,7 @@ app.get("/test-order", (req, res) => {
     status: "new",
     createdAt: Date.now(),
     fulfillmentType: randomFulfillment,
-    orderNote: "Customer requested extra napkins and cutlery for 4 people. Please ring the bell when order is ready.", // <-- ADDED TEST NOTE
+    orderNote: "Customer requested extra napkins and cutlery for 4 people. Please ring the bell when order is ready.", 
     items: [
       { name: "VertiDog - Classic", quantity: 4, modifiers: ["Mustard", "Ketchup", "Grilled Onions", "No Relish"] },
       { name: "Chili Cheese Fries", quantity: 2, modifiers: ["Extra Chili", "Side of Ranch", "No Jalapeños", "Heavy Cheese"] },
