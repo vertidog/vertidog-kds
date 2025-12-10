@@ -175,7 +175,7 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "ORDER_REACTIVATED" && data.orderNumber) {
-        // RECALL: Bring order back from 'ready' or 'cancelled' to 'new' 
+        // RECALL: Bring order back from 'ready' or 'cancelled' to 'new' (No 'in-progress')
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -211,11 +211,11 @@ wss.on("connection", (ws) => {
         }
       } else if (data.type === "SYNC_REQUEST") {
         // Handle explicit sync request from kitchen.html connect()
-        // --- FIX: Send ALL orders, not just active ones ---
+        // FIX: Send ALL orders, so 'ready' and 'cancelled' orders persist in the COMPLETE section on client refresh.
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
-            // Send ALL orders. The client side (kitchen.html) must now filter/render them.
+            // Send ALL orders. The client side (kitchen.html) must filter/render them.
             orders: Object.values(orders), 
           })
         );
@@ -226,11 +226,11 @@ wss.on("connection", (ws) => {
   });
 
   // Initial sync request
-  // --- FIX: Send ALL orders, not just active ones ---
+  // FIX: Send ALL orders, so 'ready' and 'cancelled' orders persist in the COMPLETE section on client refresh.
   ws.send(
     JSON.stringify({
       type: "SYNC_STATE",
-      // Send ALL orders. The client side (kitchen.html) must now filter/render them.
+      // Send ALL orders. The client side (kitchen.html) must filter/render them.
       orders: Object.values(orders),
     })
   );
@@ -327,7 +327,7 @@ app.post("/square/webhook", async (req, res) => {
         if (variationName && variationName.toLowerCase() !== baseName.toLowerCase()) {
             displayName = `${baseName} - ${variationName}`;
         }
-        
+
         return {
           name: displayName, 
           quantity: toNumberQuantity(li.quantity || 1),
@@ -372,7 +372,7 @@ app.post("/square/webhook", async (req, res) => {
     // --- DINING/FULFILLMENT OPTION ---
     const fulfillmentType = getFulfillmentType(fullOrder);
     
-    // --- ORDER NOTE/COMMENT (NEW) ---
+    // --- ORDER NOTE/COMMENT ---
     const orderNote = getOrderNote(fullOrder); 
 
     const merged = {
@@ -423,14 +423,14 @@ app.post("/square/webhook", async (req, res) => {
 // ---------------- Test endpoint ----------------
 
 app.get("/test-order", (req, res) => {
-  const ticketNum = getNextTestTicketNumber(); 
+  const ticketNum = getNextTestTicketNumber(); // <--- Sequential 001, 002... for testing
   const orderId = `TEST-${ticketNum}-${Date.now()}`;
   const fulfillmentOptions = ["PICKUP / TO GO", "DELIVERY", "FOR HERE (Default)", "CURBSIDE PICKUP"];
   const randomFulfillment = fulfillmentOptions[Math.floor(Math.random() * fulfillmentOptions.length)];
 
   const order = {
     orderId,
-    orderNumber: ticketNum, 
+    orderNumber: ticketNum, // <--- Clean 3-digit number
     status: "new",
     createdAt: Date.now(),
     fulfillmentType: randomFulfillment,
