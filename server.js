@@ -175,7 +175,7 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "ORDER_REACTIVATED" && data.orderNumber) {
-        // RECALL: Bring order back from 'ready' or 'cancelled' to 'new' (No 'in-progress')
+        // RECALL: Bring order back from 'ready' or 'cancelled' to 'new' (No 'in-progress' state)
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -224,7 +224,7 @@ wss.on("connection", (ws) => {
     }
   });
 
-  // Initial sync request
+  // Initial sync request on connect
   // FIX: Send ALL orders for client to handle persistence on refresh.
   ws.send(
     JSON.stringify({
