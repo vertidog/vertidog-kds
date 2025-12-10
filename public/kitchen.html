@@ -168,11 +168,11 @@
     main::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 6px; }
     main::-webkit-scrollbar-thumb:hover { background: #8e44ad; }
 
-    /* Fix: Bubble only takes fixed width and full height of main */
+    /* Fix: Bubble adjusts to its content */
     .bubble {
       position: relative;
       flex: 0 0 var(--card-width);
-      height: 100%; 
+      height: auto;
       align-self: flex-start;
     }
 
@@ -189,8 +189,8 @@
     .multi-row-container .bubble {
         flex: unset;
         width: var(--card-width);
-        height: calc((100% - (var(--grid-rows) * 0.9rem) + 0.9rem) / var(--grid-rows)); 
-        margin-bottom: 0.9rem; 
+        height: auto;
+        margin-bottom: 0.9rem;
     }
     
     .empty-state-wrapper {
