@@ -176,7 +176,7 @@
         flex-direction: column; /* Crucial: This makes items fill rows (vertically) first, then wrap to the right (horizontally) */
         gap: 0.9rem;
         height: 100%; 
-        width: fit-content; 
+        width: max-content; /* Use max-content for better browser compatibility in horizontal flow */
     }
 
     /* Override flex for multi-row items */
@@ -361,18 +361,18 @@
     /* Status Specific Styles */
     .bubble.new {
       border-color: var(--new);
-      box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0,0,0,0.45);
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
     }
     .bubble.new .bubble-status { background: var(--new); color: #fff; }
     .bubble.in-progress {
       border-color: var(--progress);
-      box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0,0,0,0.45);
+      box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0, 0, 0, 0.45);
     }
     .bubble.in-progress .bubble-status { background: var(--progress); color: #fff; }
     .bubble.ready {
       background: radial-gradient(circle at center, rgba(34, 197, 94, 0.22), var(--card-bg) 70%);
       border-color: var(--ready);
-      box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0,0,0,0.45);
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0, 0, 0, 0.45);
     }
     .bubble.ready .bubble-status { background: var(--ready); color: var(--card-bg); }
     .bubble.done {
@@ -919,7 +919,7 @@
               <div class="item-name">${name}</div>
               <div class="item-qty">x${Number.isFinite(qty) ? qty : 1}</div>
             </div>
-            ${mods.length ? `<div class="item-mods">+ ${modsShown}${modsMore}</div>` : ``}
+            ${mods.length ? `<div class="item-mods">| + ${modsShown}${modsMore}</div>` : ``}
           </div>
         `;
       }).join("");
