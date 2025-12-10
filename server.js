@@ -9,11 +9,11 @@ const bodyParser = require("body-parser");
 const path = require("path");
 // NOTE: crypto module needed for signature verification (postponed)
 // const crypto = require("crypto"); 
-const fs = require('fs'); // <--- ADDED: File System for persistence
+const fs = require('fs'); // <--- CRITICAL FIX 1: Import File System module
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const STATE_FILE = path.join(__dirname, 'orders.json'); // <--- ADDED: State file path
+const STATE_FILE = path.join(__dirname, 'orders.json'); // <--- CRITICAL FIX 2: Define persistence file
 
 // For Square Orders API
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN;
@@ -24,9 +24,9 @@ const SQUARE_BASE_URL =
     : "https://connect.squareup.com";
 
 // In-memory store keyed by orderId
-const orders = {};
+const orders = {}; // This is where all order data lives
 
-// ---------------- STATE MANAGEMENT (NEW BLOCK) ----------------
+// ---------------- STATE MANAGEMENT (CRITICAL NEW BLOCK) ----------------
 function loadKDSState() {
     try {
         if (fs.existsSync(STATE_FILE)) {
@@ -39,7 +39,6 @@ function loadKDSState() {
         }
     } catch (error) {
         console.error('Error loading state file:', error.message);
-        // If file load fails, start with an empty state
     }
 }
 
@@ -52,7 +51,7 @@ function saveKDSState() {
     }
 }
 
-// EXECUTE STATE LOAD ON STARTUP
+// CRITICAL FIX 3: Load state on server startup
 loadKDSState();
 // ---------------- END STATE MANAGEMENT ----------------
 
@@ -137,26 +136,21 @@ wss.on("connection", (ws) => {
       console.log("Client message received:", data.type);
 
       if (data.type === "ORDER_READY" && data.orderNumber) {
-        // Find order by orderNumber (since that's what the client sends)
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
 
         if (orderToMark) {
-          // Update the in-memory status
           orderToMark.status = "ready";
-          // NOTE: We rely on the orderId key here for server-side persistence
           orders[orderToMark.orderId] = orderToMark; 
-          saveKDSState(); // <--- ADDED: Persist on KDS action
+          saveKDSState(); // <--- CRITICAL FIX 4: Persist on KDS action
 
-          // Broadcast confirmation back to ALL clients
           broadcast({
             type: "ORDER_READY_CONFIRM",
             orderNumber: orderToMark.orderNumber,
           });
         }
       } else if (data.type === "ORDER_REACTIVATED" && data.orderNumber) {
-        // RECALL: Bring order back from 'done' or 'cancelled' to 'in-progress'
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -164,17 +158,16 @@ wss.on("connection", (ws) => {
         if (orderToMark) {
           orderToMark.status = "in-progress";
           orders[orderToMark.orderId] = orderToMark;
-          saveKDSState(); // <--- ADDED: Persist on KDS action
+          saveKDSState(); // <--- CRITICAL FIX 4: Persist on KDS action
 
           console.log(`Order ${data.orderNumber} RECALLED/REACTIVATED.`);
           
           broadcast({
-            type: "NEW_ORDER", // Use NEW_ORDER to trigger a refresh on all screens
+            type: "NEW_ORDER", 
             ...orderToMark,
           });
         }
       } else if (data.type === "ORDER_CANCELLED" && data.orderNumber) {
-        // CANCEL: Mark an active order as 'cancelled'
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
@@ -182,12 +175,12 @@ wss.on("connection", (ws) => {
         if (orderToMark) {
           orderToMark.status = "cancelled";
           orders[orderToMark.orderId] = orderToMark;
-          saveKDSState(); // <--- ADDED: Persist on KDS action
+          saveKDSState(); // <--- CRITICAL FIX 4: Persist on KDS action
           
           console.log(`Order ${data.orderNumber} CANCELLED by KDS user.`);
 
           broadcast({
-            type: "NEW_ORDER", // Use NEW_ORDER to trigger a refresh on all screens
+            type: "NEW_ORDER", 
             ...orderToMark,
           });
         }
@@ -196,8 +189,8 @@ wss.on("connection", (ws) => {
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
-            // FIX: Send ALL orders on sync request
-            orders: Object.values(orders), // Removed filter
+            // CRITICAL FIX 5: Send ALL orders on sync request
+            orders: Object.values(orders), // Ensures completed/cancelled orders are sent
           })
         );
       }
@@ -206,12 +199,12 @@ wss.on("connection", (ws) => {
     }
   });
 
-  // Initial sync request
+  // Initial sync request on connect
   ws.send(
     JSON.stringify({
       type: "SYNC_STATE",
-      // FIX: Send ALL orders on initial connect
-      orders: Object.values(orders), // Removed filter
+      // CRITICAL FIX 5: Send ALL orders on initial connect
+      orders: Object.values(orders), // Ensures completed/cancelled orders are sent
     })
   );
 
@@ -282,7 +275,7 @@ app.post("/square/webhook", async (req, res) => {
       orderNumber =
         fullOrder.ticket_name ||
         fullOrder.order_number ||
-        fullOrder.display_id || // <--- This is the key display number
+        fullOrder.display_id || 
         fullOrder.receipt_number ||
         (fullOrder.id ? fullOrder.id.slice(-6).toUpperCase() : null);
     } else {
@@ -294,11 +287,10 @@ app.post("/square/webhook", async (req, res) => {
     const existing = orders[orderId] || {};
     const previousKdsStatus = existing.status; 
     
-    // ---------- ITEMS ----------
+    // ---------- ITEMS (Structure preserved from stable version) ----------
     let items = [];
     if (fullOrder && Array.isArray(fullOrder.line_items)) {
       items = fullOrder.line_items.map((li) => {
-        // --- LOGIC: Extract the Variation Name ---
         const baseName = li.name || "Item";
         const variationName = li.variation_name ? li.variation_name.trim() : null;
         
@@ -328,23 +320,22 @@ app.post("/square/webhook", async (req, res) => {
     const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
 
     
-    // --- ULTIMATE KDS STATUS LOCK FIX (Ensures KDS-set status is sticky) ---
+    // --- CRITICAL FIX 6: KDS STATUS LOCK (Prevents reversion to 'new') ---
     
     let kdsStatus = previousKdsStatus || "new";
     
-    // Rule 1: Square's CANCELED/CLOSED states always override, setting the KDS status to 'cancelled'.
+    // Rule 1: Square's CANCELED/CLOSED states always override.
     if (stateFromSquare === "canceled" || stateFromSquare === "closed") {
         kdsStatus = "cancelled";
     }
     
-    // Rule 2: If the order was NOT previously cancelled, and Square says it's OPEN, 
-    // but the KDS has marked it 'ready', we stick to 'ready'.
-    // NOTE: This prevents a completed KDS ticket from being reset by a generic 'OPEN' webhook.
-    else if (previousKdsStatus && previousKdsStatus !== 'new' && previousKdsStatus !== 'in-progress') {
-        kdsStatus = previousKdsStatus; // Stick to the existing KDS status (ready/cancelled)
+    // Rule 2: If the order was previously marked 'ready' or 'cancelled' by the KDS, 
+    // it STAYS that way, preventing the Square 'OPEN' webhook from resetting it.
+    else if (previousKdsStatus && (previousKdsStatus === 'ready' || previousKdsStatus === 'cancelled')) {
+        kdsStatus = previousKdsStatus; // Stick to the existing KDS status
     }
     
-    // --- END ULTIMATE KDS STATUS LOCK FIX ---
+    // --- END KDS STATUS LOCK FIX ---
 
     const merged = {
       orderId,
@@ -357,23 +348,20 @@ app.post("/square/webhook", async (req, res) => {
     };
 
     orders[orderId] = merged;
-    saveKDSState(); // <--- ADDED: Persist order state after webhook update
+    saveKDSState(); // <--- CRITICAL FIX 7: Persist order state after webhook update
 
     console.log("✅ Final KDS order object:", merged);
 
-    // --- FIX: Prevent re-broadcasting orders that are already marked done/cancelled ---
+    // --- FIX: Prevent broadcasting of locked orders that didn't change status ---
     let statusChanged = merged.status !== previousKdsStatus;
     let shouldBroadcast = true;
     
-    // If we have an existing record (not a brand new order):
     if (previousKdsStatus) { 
-        // If the status hasn't changed, AND the status is terminal (ready/cancelled), suppress the broadcast.
         if (!statusChanged && (merged.status === 'cancelled' || merged.status === 'ready')) {
             console.log(`❌ Suppressing webhook update for order ${merged.orderNumber}: Status locked to ${merged.status}.`);
             shouldBroadcast = false;
         }
     }
-    // New orders (previousKdsStatus=undefined) or orders whose status changed (e.g., in-progress -> ready) will still broadcast.
 
     if (shouldBroadcast) {
         broadcast({
@@ -385,7 +373,6 @@ app.post("/square/webhook", async (req, res) => {
     return res.status(200).send("ok");
   } catch (err) {
     console.error("Webhook Error:", err);
-    // 200 so Square doesn’t spam retries while we debug
     return res.status(200).send("error");
   }
 });
@@ -403,7 +390,7 @@ app.get("/test-order", (req, res) => {
     // ADDED: Large, complex order for dynamic sizing test, with descriptive names
     items: [
       { name: "VertiDog - Classic", quantity: 4, modifiers: ["Mustard", "Ketchup", "Grilled Onions", "No Relish"] },
-      { name: "Chili Cheese Fries", quantity: 2, modifiers: ["Extra Chili", "Side of Ranch", "No Jalapeños", "Heavy Cheese"] },
+      { name: "Chili Cheese Fries", quantity: 2, modifiers: [\"Extra Chili\", "Side of Ranch", "No Jalapeños", "Heavy Cheese"] },
       { name: "Large Soda - Coke", quantity: 3, modifiers: ["Two 20oz", "One 32oz"] },
       { name: "Large Soda - Sprite", quantity: 3, modifiers: [] },
       { name: "Double Bacon Burger", quantity: 3, modifiers: ["Medium Rare", "Add Avocado", "Extra Crispy Bacon", "Side of Mayo"] },
@@ -416,7 +403,7 @@ app.get("/test-order", (req, res) => {
   // Use toNumberQuantity for safety
   order.itemCount = order.items.reduce((sum, it) => sum + toNumberQuantity(it.quantity), 0);
   orders[orderId] = order;
-  saveKDSState(); // <--- ADDED: Persist test order
+  saveKDSState(); // Persist test order
 
   broadcast({
     type: "NEW_ORDER",
