@@ -48,9 +48,10 @@
       gap: 1rem;
       user-select: none;
       
-      /* FIX: Ensure header is sticky/fixed and spans the full screen */
-      position: sticky; 
+      /* FINAL FIX: Use fixed position relative to the viewport */
+      position: fixed; 
       top: 0; 
+      left: 0; 
       width: 100%;
     }
     header .title {
@@ -146,14 +147,11 @@
     --------------------------------*/
     main {
       flex: 1;
-      padding: 0.9rem;
-      display: flex;
-      flex-direction: row; 
-      gap: 0.9rem;
+      /* Adjust padding to account for fixed header (approx 70px) */
+      padding: 4.5rem 0.9rem 0.9rem 0.9rem;
       overflow-x: scroll; 
       overflow-y: hidden; 
       min-height: 220px;
-      padding-bottom: 0.9rem;
       -webkit-overflow-scrolling: touch; 
     }
     
@@ -167,27 +165,27 @@
       position: relative;
       flex: 0 0 var(--card-width);
       height: 100%; 
-      
-      /* Multi-row Mode: Grid styling preparation */
       align-self: flex-start;
-      margin-bottom: calc(var(--grid-rows) * 0.9rem); 
+      /* No margin calc needed, handled by flex gap */
     }
 
-    /* Apply Grid container properties when multi-row is active */
+    /* Multi-row container uses Flexbox to wrap items into rows (Horizontal first) */
     .multi-row-container {
-        display: grid;
-        grid-auto-flow: column; /* Flow columns first (horizontal scrolling) */
-        grid-template-rows: repeat(var(--grid-rows), 1fr); /* Define number of rows */
+        display: flex;
+        flex-wrap: wrap; 
+        flex-direction: column; /* Crucial: This makes items fill rows (vertically) first, then wrap to the right (horizontally) */
         gap: 0.9rem;
-        height: 100%;
-        width: max-content; 
+        height: 100%; 
+        width: fit-content; 
     }
 
     /* Override flex for multi-row items */
     .multi-row-container .bubble {
         flex: unset;
         width: var(--card-width);
-        height: 100%;
+        /* Calculate item height to fit exactly in the number of rows, accounting for gaps */
+        /* Formula: (100% - (N * gap) + gap) / N */
+        height: calc((100% - (var(--grid-rows) * 0.9rem) + 0.9rem) / var(--grid-rows)); 
         margin-bottom: 0;
     }
     
@@ -214,7 +212,7 @@
       flex: 1;
     }
 
-    /* DRAG STYLES (Kept for completeness, though less relevant in single row) */
+    /* DRAG STYLES */
     .dragging { opacity: 0.4; }
 
 
@@ -967,7 +965,7 @@
         // Reset container classes for empty state
         bubbleContainer.classList.remove('multi-row-container'); 
       } else {
-        // Apply grid flow if more than 1 row is selected
+        // Apply multi-row styling class if needed
         if (currentRows > 1) {
             bubbleContainer.classList.add('multi-row-container');
         } else {
