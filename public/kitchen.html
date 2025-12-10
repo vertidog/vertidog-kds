@@ -456,22 +456,23 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 2rem;
-        height: 2rem;
+        width: 2.75rem;
+        height: 2.75rem;
         border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.55);
-        background: rgba(255, 255, 255, 0.12);
-        color: #fff;
-        font-size: 1.15rem;
+        border: 2px solid rgba(15, 23, 42, 0.15);
+        background: #111827;
+        color: #fbbf24;
+        font-size: 1.35rem;
         cursor: pointer;
         transition: all 0.2s ease;
+        box-shadow: 0 10px 18px rgba(0, 0, 0, 0.18);
     }
-    .priority-star-btn:hover { filter: brightness(1.05); }
+    .priority-star-btn:hover { filter: brightness(1.08); }
     .priority-star-btn.is-prioritized {
         background: #fbbf24;
         color: #1f2937;
         border-color: #fbbf24;
-        box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.35);
+        box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.35), 0 10px 18px rgba(0, 0, 0, 0.18);
     }
     .priority-star-btn.passive-star { pointer-events: none; }
     .priority-star-btn.priority-placeholder {
@@ -480,6 +481,23 @@
         background: transparent;
         box-shadow: none;
         pointer-events: none;
+    }
+
+    .priority-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.85rem 0.85rem 1rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(15, 23, 42, 0.03);
+        border-radius: 0 0 var(--radius) var(--radius);
+    }
+
+    .priority-icon {
+        font-size: 0.9rem;
+        color: var(--muted);
+        user-select: none;
     }
 
     .order-meta-row {
@@ -1124,6 +1142,13 @@
              ? `<button class="priority-star-btn ${o.isPrioritized ? 'is-prioritized' : ''}" aria-label="Toggle priority" onclick="window.togglePriority('${o.orderNumber}', event)">★</button>`
              : `<span class="priority-star-btn ${o.isPrioritized ? 'is-prioritized passive-star' : 'priority-placeholder'}">★</span>`;
 
+          const prioritySectionHtml = `
+            <div class="priority-section">
+              <span class="priority-icon" aria-hidden="true">★</span>
+              ${priorityBtn}
+            </div>
+          `;
+
           const timerHtml = `${formatTimeElapsed(o.createdAt)}`;
 
           const diningOption = escapeHtml(o.diningOption || "");
@@ -1134,7 +1159,7 @@
           b.innerHTML = `
             <div class="bubble-top-bar ${o.status !== 'ready' ? o.status : ''}">
               <div class="bubble-top-left">
-                <div class="order-number-tag">${escapeHtml(o.orderNumber)}${priorityBtn ? ` ${priorityBtn}` : ``}</div>
+                <div class="order-number-tag">${escapeHtml(o.orderNumber)}</div>
                 <div class="order-meta-row">
                   ${diningOption ? `<span class=\\"dining-chip\\">${diningOption}</span>` : ``}
                   <span class="status-chip">${statusText}</span>
@@ -1160,6 +1185,7 @@
                 </div>
                 ${notes ? `<div class=\\"bubble-notes\\">${notes}</div>` : ``}
             </div>
+            ${prioritySectionHtml}
           `;
 
           bubbleContainer.appendChild(b);
