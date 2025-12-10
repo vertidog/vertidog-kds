@@ -426,12 +426,13 @@ app.post("/square/webhook", async (req, res) => {
       0
     );
     const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
+    const eventTypeLower = typeof eventType === "string" ? eventType.toLowerCase() : "";
 
     // --- ULTIMATE KDS STATUS LOCK FIX ---
     let kdsStatus = existing.status || "new";
     
     // Rule 1: Cancellation is the only update that can override any KDS status.
-    if (stateFromSquare === "canceled" || stateFromSquare === "cancelled" || stateFromSquare === "closed") {
+    if (stateFromSquare === "canceled" || stateFromSquare === "cancelled" || stateFromSquare === "closed" || eventTypeLower.includes("cancel")) {
         kdsStatus = "cancelled";
     }
     
