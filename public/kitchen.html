@@ -47,6 +47,11 @@
       z-index: 10;
       gap: 1rem;
       user-select: none;
+      
+      /* FIX: Ensure header is sticky/fixed and spans the full screen */
+      position: sticky; 
+      top: 0; 
+      width: 100%;
     }
     header .title {
       display: flex;
@@ -102,26 +107,25 @@
       box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
     }
 
-    /* Connection Status Pill */
+    /* Connection Status Pill (Icon Only) */
     header .status-pill {
-      padding: 0.35rem 0.8rem;
+      padding: 0.5rem 0.5rem; /* Make it square/round and small */
       border-radius: 999px;
-      font-size: 0.9rem;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      background: rgba(34, 197, 94, 0.12);
-      border: 1px solid rgba(34, 197, 94, 0.3);
-      color: #bbf7d0;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.4); /* Subtle border for visibility */
       flex: 0 0 auto;
-      white-space: nowrap;
+      transition: all 0.4s;
     }
     header .dot {
-      width: 0.55rem;
-      height: 0.55rem;
+      width: 0.7rem; /* Slightly larger dot */
+      height: 0.7rem;
       border-radius: 999px;
       background: #22c55e;
       box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
+      transition: all 0.4s;
     }
 
     /* Options Button */
@@ -211,11 +215,6 @@
     }
 
     /* DRAG STYLES (Kept for completeness, though less relevant in single row) */
-    .drag-over-active {
-        /* outline: 4px dashed var(--accent); */
-        background-color: var(--drag-hover-color);
-        border-radius: var(--radius);
-    }
     .dragging { opacity: 0.4; }
 
 
@@ -363,13 +362,11 @@
 
     /* Status Specific Styles */
     .bubble.new {
-      background: var(--card-bg);
       border-color: var(--new);
       box-shadow: 0 0 12px rgba(59, 130, 246, 0.55), 0 6px 16px rgba(0,0,0,0.45);
     }
     .bubble.new .bubble-status { background: var(--new); color: #fff; }
     .bubble.in-progress {
-      background: var(--card-bg);
       border-color: var(--progress);
       box-shadow: 0 0 12px rgba(249, 115, 22, 0.55), 0 6px 16px rgba(0,0,0,0.45);
     }
@@ -475,7 +472,6 @@
     <div style="display: flex; gap: 0.5rem; align-items: center;">
         <div class="status-pill" id="connection-status">
             <span class="dot"></span>
-            <span>Connected</span>
         </div>
         <button class="options-btn" onclick="toggleOptionsModal()">⚙️</button>
     </div>
@@ -650,13 +646,14 @@
     --------------------------------*/
     function setConnectionState(connected) {
       const dot = connectionStatus.querySelector(".dot");
-      const label = connectionStatus.querySelector("span:last-child");
       if (connected) {
-        dot.style.background = "#22c55e";
-        label.textContent = "Connected";
+        dot.style.background = "#22c55e"; // Green
+        dot.style.boxShadow = "0 0 10px rgba(34, 197, 94, 0.9)";
+        connectionStatus.style.borderColor = "rgba(34, 197, 94, 0.4)";
       } else {
-        dot.style.background = "#f97316";
-        label.textContent = "Reconnecting…";
+        dot.style.background = "#f97316"; // Orange/Yellow
+        dot.style.boxShadow = "0 0 10px rgba(249, 115, 22, 0.9)";
+        connectionStatus.style.borderColor = "rgba(249, 115, 22, 0.4)";
       }
     }
 
@@ -1024,7 +1021,7 @@
           
           const timerHtml = currentFilter === 'active' ? `<div class="bubble-timer">${formatTimeElapsed(o.createdAt)}</div>` : '';
           
-          // RENDER FULL DETAIL: Always render the full item list for completed/cancelled orders
+          // RENDER FULL DETAIL
           const itemsHtml = renderItemsHtml(o.items, 99);
           
           b.innerHTML = `
