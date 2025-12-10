@@ -73,6 +73,15 @@
         border-radius: 8px;
         transition: color 0.2s, background-color 0.2s;
     }
+
+    .tab-count {
+        margin-left: 8px;
+        background: rgba(255, 255, 255, 0.15);
+        color: var(--card-bg);
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.9rem;
+    }
     
     .kds-tab.active {
         color: var(--card-bg); /* White text for active tab */
@@ -95,6 +104,15 @@
       padding: 5px;
       height: calc(100vh - 70px); /* Adjust height based on header height */
       overflow-y: auto;
+    }
+
+    .empty-state {
+        color: var(--card-bg);
+        text-align: center;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: var(--radius);
+        border: 1px dashed rgba(255, 255, 255, 0.2);
     }
 
     /* -----------------------------
@@ -317,9 +335,9 @@
 <body>
   <div class="kds-container">
     <div class="kds-tabs">
-        <button class="kds-tab active" data-filter="active">Active Orders</button>
-        <button class="kds-tab" data-filter="ready">Completed Orders</button>
-        <button class="kds-tab" data-filter="cancelled">Cancelled Orders</button>
+        <button class="kds-tab active" data-filter="active">Active Orders <span class="tab-count" id="tab-count-active">0</span></button>
+        <button class="kds-tab" data-filter="ready">Completed Orders <span class="tab-count" id="tab-count-ready">0</span></button>
+        <button class="kds-tab" data-filter="cancelled">Cancelled Orders <span class="tab-count" id="tab-count-cancelled">0</span></button>
     </div>
     <div class="kds-tab-content">
         <div id="active-bubble-grid" class="bubble-grid active"></div>
@@ -403,6 +421,24 @@
             return orders.filter(o => o.status === 'new' || o.status === 'in-progress');
         }
         return orders.filter(o => getOrderFilter(o) === filter);
+    }
+
+    function getTabCounts() {
+        return Object.values(store).reduce((acc, order) => {
+            acc[getOrderFilter(order)]++;
+            return acc;
+        }, { active: 0, ready: 0, cancelled: 0 });
+    }
+
+    function updateTabCounts() {
+        const counts = getTabCounts();
+        const activeEl = document.getElementById('tab-count-active');
+        const readyEl = document.getElementById('tab-count-ready');
+        const cancelledEl = document.getElementById('tab-count-cancelled');
+
+        if (activeEl) activeEl.textContent = counts.active;
+        if (readyEl) readyEl.textContent = counts.ready;
+        if (cancelledEl) cancelledEl.textContent = counts.cancelled;
     }
 
     // --- Timer & Visuals ---
@@ -545,14 +581,28 @@
     function render(filter) {
       currentFilter = filter;
       const ordersToRender = getFilteredOrders(filter);
-      
+
+      document.querySelectorAll('.kds-tab').forEach(tab => {
+          tab.classList.toggle('active', tab.dataset.filter === filter);
+      });
+
       const allContainers = document.querySelectorAll('.bubble-grid');
       allContainers.forEach(c => c.style.display = 'none');
-      
+
       const bubbleContainer = getBubbleContainer(filter);
       if (bubbleContainer) {
           bubbleContainer.style.display = 'grid';
           bubbleContainer.innerHTML = ''; // Clear existing bubbles
+
+          if (ordersToRender.length === 0) {
+              const empty = document.createElement('div');
+              empty.className = 'empty-state';
+              const label = filter === 'ready' ? 'completed' : (filter === 'cancelled' ? 'cancelled' : 'active');
+              empty.textContent = `No ${label} orders right now.`;
+              bubbleContainer.appendChild(empty);
+              updateTabCounts();
+              return;
+          }
       }
 
       ordersToRender.forEach(o => {
@@ -629,23 +679,16 @@
         `;
 
         bubbleContainer.appendChild(b);
-        updateTimers(); 
       });
 
-      // Update active tab visual
-      document.querySelectorAll('.kds-tab').forEach(tab => {
-          if (tab.dataset.filter === filter) {
-              tab.classList.add('active');
-          } else {
-              tab.classList.remove('active');
-          }
-      });
+      updateTabCounts();
+      updateTimers();
     }
 
     // --- Tab Switching Logic ---
     document.querySelectorAll('.kds-tab').forEach(tab => {
         tab.addEventListener('click', (e) => {
-            const filter = e.target.dataset.filter;
+            const filter = tab.dataset.filter;
             render(filter);
         });
     });
@@ -763,6 +806,7 @@
     }
 
     // Start the connection process
+    render(currentFilter);
     connect();
   </script>
 </body>
