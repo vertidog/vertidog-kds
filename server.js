@@ -53,6 +53,59 @@ function broadcast(msgObj) {
   });
 }
 
+/**
+ * Maps Square fulfillment types to a clean display string.
+ * @param {object} fullOrder - The full Square order object.
+ * @returns {string} The display string for the fulfillment type.
+ */
+function getFulfillmentType(fullOrder) {
+    if (!fullOrder || !Array.isArray(fullOrder.fulfillments)) {
+        return "FOR HERE (Default)";
+    }
+    
+    // Iterate through fulfillments to find a primary type
+    for (const fulfillment of fullOrder.fulfillments) {
+        const type = (fulfillment.type || '').toUpperCase();
+        
+        if (type === 'PICKUP') {
+            const pickupDetails = fulfillment.pickup_details;
+            
+            // Check for Curbside Pickup details
+            if (pickupDetails && pickupDetails.curbside_pickup_details) {
+                return "CURBSIDE PICKUP";
+            }
+            
+            // Otherwise, it's a standard TO GO/PICKUP
+            return "PICKUP / TO GO"; 
+        }
+
+        if (type === 'DELIVERY') {
+            return "DELIVERY";
+        }
+        
+        if (type === 'SHIPMENT') {
+            return "SHIPMENT";
+        }
+    }
+
+    // If no fulfillment type is found or recognized, assume dine-in/for here
+    return "FOR HERE (Default)";
+}
+
+/**
+ * Extracts the top-level order note from the Square order object.
+ * @param {object} fullOrder - The full Square order object.
+ * @returns {string | null} The order note, or null if none exists.
+ */
+function getOrderNote(fullOrder) {
+    if (!fullOrder || !fullOrder.note || fullOrder.note.trim() === '') {
+        return null;
+    }
+    // Square notes are typically simple strings
+    return fullOrder.note.trim(); 
+}
+
+
 // Fetch full order from Square if webhook was minimal
 async function fetchOrderFromSquare(orderId) {
   if (!SQUARE_ACCESS_TOKEN) {
@@ -113,7 +166,6 @@ wss.on("connection", (ws) => {
         if (orderToMark) {
           // Update the in-memory status
           orderToMark.status = "ready";
-          // NOTE: We rely on the orderId key here for server-side persistence
           orders[orderToMark.orderId] = orderToMark; 
 
           // Broadcast confirmation back to ALL clients
@@ -123,19 +175,20 @@ wss.on("connection", (ws) => {
           });
         }
       } else if (data.type === "ORDER_REACTIVATED" && data.orderNumber) {
-        // RECALL: Bring order back from 'done' or 'cancelled' to 'in-progress'
+        // RECALL: Bring order back from 'ready' or 'cancelled' to 'new' (No 'in-progress')
         const orderToMark = Object.values(orders).find(
           (o) => o.orderNumber === data.orderNumber
         );
 
         if (orderToMark) {
-          orderToMark.status = "in-progress";
+          // Change status to 'new' to bring it back to the active screen
+          orderToMark.status = "new"; 
           orders[orderToMark.orderId] = orderToMark;
 
           console.log(`Order ${data.orderNumber} RECALLED/REACTIVATED.`);
           
           broadcast({
-            type: "NEW_ORDER", // Use NEW_ORDER to trigger a refresh on all screens
+            type: "NEW_ORDER",
             ...orderToMark,
           });
         }
@@ -152,17 +205,17 @@ wss.on("connection", (ws) => {
           console.log(`Order ${data.orderNumber} CANCELLED by KDS user.`);
 
           broadcast({
-            type: "NEW_ORDER", // Use NEW_ORDER to trigger a refresh on all screens
+            type: "NEW_ORDER",
             ...orderToMark,
           });
         }
       } else if (data.type === "SYNC_REQUEST") {
-        // Handle explicit sync request from kitchen.html connect()
+        // FIX: Send ALL orders for client to handle persistence on refresh.
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
-            // Only send active orders for initial KDS screen load
-            orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
+            // Send ALL orders. The client side (kitchen.html) must filter/render them.
+            orders: Object.values(orders), 
           })
         );
       }
@@ -171,11 +224,13 @@ wss.on("connection", (ws) => {
     }
   });
 
-  // Initial sync request (only send active orders)
+  // Initial sync request
+  // FIX: Send ALL orders for client to handle persistence on refresh.
   ws.send(
     JSON.stringify({
       type: "SYNC_STATE",
-      orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
+      // Send ALL orders. The client side (kitchen.html) must filter/render them.
+      orders: Object.values(orders),
     })
   );
 
@@ -271,7 +326,7 @@ app.post("/square/webhook", async (req, res) => {
         if (variationName && variationName.toLowerCase() !== baseName.toLowerCase()) {
             displayName = `${baseName} - ${variationName}`;
         }
-        
+
         return {
           name: displayName, 
           quantity: toNumberQuantity(li.quantity || 1),
@@ -292,7 +347,7 @@ app.post("/square/webhook", async (req, res) => {
     const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
 
     
-    // --- ULTIMATE KDS STATUS LOCK FIX (Ensures KDS-set status is sticky) ---
+    // --- KDS STATUS LOCK LOGIC (Ensures KDS-set status is sticky) ---
     
     let kdsStatus = previousKdsStatus || "new";
     
@@ -301,14 +356,23 @@ app.post("/square/webhook", async (req, res) => {
         kdsStatus = "cancelled";
     }
     
-    // Rule 2: If the order was NOT previously cancelled, and Square says it's OPEN, 
-    // but the KDS has marked it 'ready', we stick to 'ready'.
-    // NOTE: This prevents a completed KDS ticket from being reset by a generic 'OPEN' webhook.
-    else if (previousKdsStatus && previousKdsStatus !== 'new' && previousKdsStatus !== 'in-progress') {
-        kdsStatus = previousKdsStatus; // Stick to the existing KDS status (ready/cancelled)
+    // Rule 2: If the order was NOT previously cancelled, and the KDS has marked it 'ready', we stick to 'ready'.
+    else if (previousKdsStatus === 'ready') {
+        kdsStatus = 'ready'; 
     }
     
-    // --- END ULTIMATE KDS STATUS LOCK FIX ---
+    // Rule 3: If Square sends an OPEN status on a brand NEW order, keep it 'new'.
+    else if (previousKdsStatus === undefined && stateFromSquare === 'open') {
+        kdsStatus = 'new';
+    }
+    
+    // --- END KDS STATUS LOCK LOGIC ---
+
+    // --- DINING/FULFILLMENT OPTION ---
+    const fulfillmentType = getFulfillmentType(fullOrder);
+    
+    // --- ORDER NOTE/COMMENT ---
+    const orderNote = getOrderNote(fullOrder); 
 
     const merged = {
       orderId,
@@ -318,6 +382,8 @@ app.post("/square/webhook", async (req, res) => {
       itemCount,
       items,
       stateFromSquare,
+      fulfillmentType, 
+      orderNote, 
     };
 
     orders[orderId] = merged;
@@ -336,7 +402,7 @@ app.post("/square/webhook", async (req, res) => {
             shouldBroadcast = false;
         }
     }
-    // New orders (previousKdsStatus=undefined) or orders whose status changed (e.g., in-progress -> ready) will still broadcast.
+    // New orders (previousKdsStatus=undefined) or orders whose status changed (e.g., new -> ready) will still broadcast.
 
     if (shouldBroadcast) {
         broadcast({
@@ -358,12 +424,16 @@ app.post("/square/webhook", async (req, res) => {
 app.get("/test-order", (req, res) => {
   const ticketNum = getNextTestTicketNumber(); // <--- Sequential 001, 002... for testing
   const orderId = `TEST-${ticketNum}-${Date.now()}`;
+  const fulfillmentOptions = ["PICKUP / TO GO", "DELIVERY", "FOR HERE (Default)", "CURBSIDE PICKUP"];
+  const randomFulfillment = fulfillmentOptions[Math.floor(Math.random() * fulfillmentOptions.length)];
+
   const order = {
     orderId,
     orderNumber: ticketNum, // <--- Clean 3-digit number
     status: "new",
     createdAt: Date.now(),
-    // ADDED: Large, complex order for dynamic sizing test, with descriptive names
+    fulfillmentType: randomFulfillment,
+    orderNote: "Customer requested extra napkins and cutlery for 4 people. Please ring the bell when order is ready.", 
     items: [
       { name: "VertiDog - Classic", quantity: 4, modifiers: ["Mustard", "Ketchup", "Grilled Onions", "No Relish"] },
       { name: "Chili Cheese Fries", quantity: 2, modifiers: ["Extra Chili", "Side of Ranch", "No Jalapeños", "Heavy Cheese"] },
@@ -376,7 +446,7 @@ app.get("/test-order", (req, res) => {
       { name: "Milkshake (Chocolate)", quantity: 2, modifiers: ["Extra Thick", "Whipped Cream", "Cherry"] },
     ],
   };
-  // Use toNumberQuantity for safety
+  
   order.itemCount = order.items.reduce((sum, it) => sum + toNumberQuantity(it.quantity), 0);
   orders[orderId] = order;
 
@@ -385,7 +455,7 @@ app.get("/test-order", (req, res) => {
     ...order,
   });
 
-  res.send(`Test order #${ticketNum} sent to KDS`);
+  res.send(`Test order #${ticketNum} sent to KDS (Fulfillment: ${randomFulfillment}, Note: "${order.orderNote}")`);
 });
 
 // ---------------- Start server ----------------
