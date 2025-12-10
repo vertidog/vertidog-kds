@@ -24,8 +24,6 @@
       --time-critical: #ef4444; /* Red (5 mins) */
       --time-default: #1f2937;  /* Dark text color for timer */
 
-      /* User configurable: Controls how many rows the KDS uses */
-      --grid-rows: 1;
       /* Fixed width for a card when in a single row or narrow grid */
       --card-width: 360px;
     }
@@ -59,6 +57,12 @@
       left: 0; 
       width: 100%;
       color: #fff; /* Ensure header text is white */
+    }
+    header .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      min-width: 0;
     }
     header .title {
       display: flex;
@@ -134,19 +138,6 @@
       transition: all 0.4s;
     }
 
-    /* Options Button */
-    .options-btn {
-        background: none;
-        border: none;
-        color: var(--muted);
-        font-size: 1.6rem;
-        cursor: pointer;
-        transition: color 0.2s;
-        padding: 0 0.5rem;
-        line-height: 1;
-    }
-    .options-btn:hover { color: var(--accent); }
-    
     /* -----------------------------
       MAIN SCROLLER & CARD LAYOUT
     --------------------------------*/
@@ -176,23 +167,6 @@
       align-self: flex-start;
     }
 
-    .multi-row-container {
-        display: flex;
-        flex-wrap: wrap; 
-        flex-direction: column; 
-        /* gap: 0.9rem; -- Removed here, added to main, vertical gap handled by margin-bottom */
-        height: 100%; 
-        width: max-content; 
-    }
-
-    /* Fix: Re-add vertical margin when in multi-row view */
-    .multi-row-container .bubble {
-        flex: unset;
-        width: var(--card-width);
-        height: auto;
-        margin-bottom: 0.9rem;
-    }
-    
     .empty-state-wrapper {
         flex: 0 0 100%; 
         height: 100%;
@@ -550,68 +524,17 @@
         }
     }
 
-    /* -----------------------------
-      MODAL STYLES (Keep existing)
-    --------------------------------*/
-    .modal {
-        display: none; 
-        position: fixed; 
-        z-index: 1000; 
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.4); 
-        justify-content: center;
-        align-items: center;
-    }
-    .modal.show { display: flex; }
-
-    .modal-content {
-        background-color: var(--card-bg);
-        padding: 2rem;
-        border-radius: var(--radius);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.7);
-        width: 300px;
-        text-align: center;
-        border: 1px solid var(--accent);
-    }
-    .modal-content h3 {
-        margin-top: 0;
-        color: var(--text);
-    }
-    .row-option-btn {
-        display: block;
-        width: 100%;
-        padding: 0.75rem;
-        margin-bottom: 0.75rem;
-        border: 2px solid var(--muted);
-        border-radius: 8px;
-        background-color: #1f2937;
-        color: var(--text);
-        font-size: 1.1rem;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-    .row-option-btn:hover {
-        background-color: #374151;
-    }
-    .row-option-btn.selected {
-        border-color: var(--accent);
-        background-color: var(--accent);
-        color: white;
-        font-weight: bold;
-        box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
-    }
-
   </style>
 </head>
 
-<body>
+  <body>
   <header>
-    <div class="title">
-      <h1>VERTIDOG KDS</h1>
-      <span class="subtitle"></span> </div>
+    <div class="brand">
+      <div class="title">
+        <h1>VERTIDOG KDS</h1>
+        <span class="subtitle"></span>
+      </div>
+    </div>
     <div id="status-pills" class="status-tabs">
       <div class="tab-pill active-tab" data-filter="active" onclick="setFilter('active')">ACTIVE (<span id="active-count">0</span>)</div>
       <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
@@ -620,7 +543,6 @@
         <div class="status-pill" id="connection-status">
             <span class="dot"></span>
         </div>
-        <button class="options-btn" onclick="toggleOptionsModal()">⚙️</button>
     </div>
   </header>
 
@@ -630,16 +552,6 @@
         ondrop="handleDrop(event, 'active')">
     </main>
   
-  <div id="options-modal" class="modal" onclick="if(event.target.id === 'options-modal') toggleOptionsModal()">
-    <div class="modal-content">
-        <h3>Display Rows</h3>
-        <button class="row-option-btn" data-rows="1" onclick="setRows(1)">1 Row (Max Detail)</button>
-        <button class="row-option-btn" data-rows="2" onclick="setRows(2)">2 Rows (Medium Density)</button>
-        <button class="row-option-btn" data-rows="3" onclick="setRows(3)">3 Rows (Max Density)</button>
-    </div>
-  </div>
-
-
   <audio id="ready-sound" preload="auto">
     <source src="/sounds/order-ready.mp3" type="audio/mpeg" />
   </audio>
@@ -653,7 +565,6 @@
     const bubbleContainer = document.getElementById("bubble-container");
     const connectionStatus = document.getElementById("connection-status");
     const readySound = document.getElementById("ready-sound");
-    const optionsModal = document.getElementById("options-modal");
     
     const activeCountEl = document.getElementById("active-count");
     const doneCountEl = document.getElementById("done-count");
@@ -661,7 +572,6 @@
     let socket;
     let selectedOrderNumber = null;
     let currentFilter = 'active';
-    let currentRows = 1; 
 
     let pressTimer = null;
     let isLongPress = false;
@@ -698,40 +608,8 @@
       return lower;
     }
     
-    // --- Options Modal Logic ---
-
-    window.toggleOptionsModal = function() {
-        optionsModal.classList.toggle('show');
-        if(optionsModal.classList.contains('show')) {
-            document.querySelectorAll('.row-option-btn').forEach(btn => {
-                btn.classList.remove('selected');
-                if (parseInt(btn.dataset.rows) === currentRows) {
-                    btn.classList.add('selected');
-                }
-            });
-        }
-    }
-
-    window.setRows = function(rows) {
-        currentRows = rows;
-        document.documentElement.style.setProperty('--grid-rows', rows);
-        localStorage.setItem('kdsRows', rows);
-        render();
-        toggleOptionsModal();
-    }
-    
-    function loadInitialRows() {
-        const savedRows = localStorage.getItem('kdsRows');
-        if (savedRows) {
-            currentRows = parseInt(savedRows);
-            document.documentElement.style.setProperty('--grid-rows', currentRows);
-        }
-    }
-    loadInitialRows();
-
-
     /* -----------------------------
-      TTS SETUP 
+      TTS SETUP
     --------------------------------*/
 
     function loadVoices() {
@@ -1241,15 +1119,7 @@
         emptyStateWrapper.className = 'empty-state-wrapper';
         emptyStateWrapper.innerHTML = `<div class="empty-state"><div>${emptyMessage}</div></div>`;
         bubbleContainer.appendChild(emptyStateWrapper);
-        bubbleContainer.classList.remove('multi-row-container'); 
       } else {
-        // Apply multi-row class to the container when needed
-        if (currentRows > 1) {
-            bubbleContainer.classList.add('multi-row-container');
-        } else {
-            bubbleContainer.classList.remove('multi-row-container');
-        }
-        
         filteredList.forEach((o) => {
           const statusValue = normalizeStatus(o.status);
           const isSelected = o.orderNumber === selectedOrderNumber;
