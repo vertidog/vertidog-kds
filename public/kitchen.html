@@ -16,7 +16,6 @@
       --text: #1f2937; /* Dark Text */
       --muted: #6b7280;
       --accent: #a855f7;
-      --drag-hover-color: rgba(168, 85, 247, 0.22);
       --radius: 16px;
       
       /* Time Alert Colors (3 mins / 5 mins) */
@@ -191,14 +190,11 @@
       flex: 1;
     }
 
-    .dragging { opacity: 0.4; }
-
-
     /* CARD STYLES */
     .bubble {
       position: relative;
       border-radius: var(--radius);
-      cursor: grab;
+      cursor: pointer;
       border: 2px solid transparent;
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
       transition: transform 0.1s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out, opacity 0.3s ease-out;
@@ -478,6 +474,13 @@
         box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.35);
     }
     .priority-star-btn.passive-star { pointer-events: none; }
+    .priority-star-btn.priority-placeholder {
+        visibility: hidden;
+        border-color: transparent;
+        background: transparent;
+        box-shadow: none;
+        pointer-events: none;
+    }
 
     .order-meta-row {
         display: flex;
@@ -548,10 +551,7 @@
     </div>
   </header>
 
-  <main id="bubble-container"
-        ondragover="handleDragOver(event, 'active')"
-        ondragleave="handleDragLeave(event, 'active')"
-        ondrop="handleDrop(event, 'active')">
+  <main id="bubble-container">
     </main>
   
   <audio id="ready-sound" preload="auto">
@@ -781,48 +781,8 @@
       render();
     }
 
-    function handleDragStart(event) {
-      const orderNumber = event.currentTarget?.dataset?.order;
-      event.dataTransfer.setData("text/plain", orderNumber);
-      event.currentTarget.classList.add("dragging");
-    }
-
-    function handleDragEnd(event) {
-      event.currentTarget.classList.remove("dragging");
-    }
-
-    function handleDragOver(event, targetType) {
-      event.preventDefault();
-      if (currentFilter === 'active') {
-          bubbleContainer.classList.add(`drag-over-${targetType}`);
-      }
-    }
-
-    function handleDragLeave(event, targetType) {
-      if (currentFilter === 'active') {
-          bubbleContainer.classList.remove(`drag-over-${targetType}`);
-      }
-    }
-
-    function handleDrop(event, targetType) {
-      event.preventDefault();
-      const orderNumber = event.dataTransfer.getData("text/plain");
-      bubbleContainer.classList.remove("drag-over-active");
-      if (!orderNumber || !orders[orderNumber]) return;
-      
-      const o = orders[orderNumber];
-      
-        if (o.status === "done") {
-          window.recallOrder(orderNumber, event);
-        } else {
-           return;
-      }
-      selectedOrderNumber = orderNumber;
-      render();
-    }
-
     function handleLongPressStart(event) {
-      if (event.dataTransfer) return; 
+      if (event.dataTransfer) return;
       const orderNumber = event.currentTarget.dataset.order;
       const o = orders[orderNumber];
         if (!o || o.status === "done") return;
@@ -1011,30 +971,28 @@
 
     // Function to update timers and color codes
     function updateTimers() {
-      if (currentFilter === 'active') {
-        document.querySelectorAll(".bubble").forEach((bubbleEl) => {
-          const orderNumber = bubbleEl.dataset.order;
-          const order = orders[orderNumber];
-          const timerEl = bubbleEl.querySelector(".bubble-timer");
-          const topBarEl = bubbleEl.querySelector(".bubble-top-bar");
-          
-          if (order && timerEl && topBarEl) {
-              const secondsElapsed = Math.floor(Math.max(0, Date.now() - order.createdAt) / 1000);
-              
-              timerEl.textContent = formatTimeElapsed(order.createdAt);
-              
-              topBarEl.classList.remove('alert', 'critical');
-              
-              if (order.status !== 'ready') {
-                if (secondsElapsed >= 300) { // 5 minutes
-                    topBarEl.classList.add('critical');
-                } else if (secondsElapsed >= 180) { // 3 minutes
-                    topBarEl.classList.add('alert');
-                }
+      document.querySelectorAll(".bubble").forEach((bubbleEl) => {
+        const orderNumber = bubbleEl.dataset.order;
+        const order = orders[orderNumber];
+        const timerEl = bubbleEl.querySelector(".bubble-timer");
+        const topBarEl = bubbleEl.querySelector(".bubble-top-bar");
+
+        if (order && timerEl && topBarEl) {
+            const secondsElapsed = Math.floor(Math.max(0, Date.now() - order.createdAt) / 1000);
+
+            timerEl.textContent = formatTimeElapsed(order.createdAt);
+
+            topBarEl.classList.remove('alert', 'critical');
+
+            if (order.status !== 'ready' && order.status !== 'done') {
+              if (secondsElapsed >= 300) { // 5 minutes
+                  topBarEl.classList.add('critical');
+              } else if (secondsElapsed >= 180) { // 3 minutes
+                  topBarEl.classList.add('alert');
               }
-          }
-        });
-      }
+            }
+        }
+      });
     }
     setInterval(updateTimers, 1000);
     
@@ -1131,10 +1089,6 @@
           b.className = `bubble ${statusValue}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
           
-          b.setAttribute("draggable", true);
-          b.ondragstart = handleDragStart;
-          b.ondragend = handleDragEnd;
-          
           if (isActiveStatus) {
               b.onmousedown = handleLongPressStart;
               b.onmouseup = handlePressEnd;
@@ -1166,17 +1120,11 @@
              ? '' 
              : `<button class="recall-btn" onclick="window.recallOrder('${o.orderNumber}', event)">RECALL</button>`;
           
-          const priorityDisplay = o.isPrioritized
-             ? `<span class="priority-star-btn is-prioritized passive-star">★</span>`
-             : '';
-
           const priorityBtn = (o.status === 'new' || o.status === 'in-progress')
              ? `<button class="priority-star-btn ${o.isPrioritized ? 'is-prioritized' : ''}" aria-label="Toggle priority" onclick="window.togglePriority('${o.orderNumber}', event)">★</button>`
-             : priorityDisplay;
+             : `<span class="priority-star-btn ${o.isPrioritized ? 'is-prioritized passive-star' : 'priority-placeholder'}">★</span>`;
 
-          const timerHtml = currentFilter === 'active'
-              ? `${formatTimeElapsed(o.createdAt)}`
-              : '';
+          const timerHtml = `${formatTimeElapsed(o.createdAt)}`;
 
           const diningOption = escapeHtml(o.diningOption || "");
           const notes = escapeHtml(o.notes || "");
