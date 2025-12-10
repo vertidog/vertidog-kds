@@ -15,6 +15,7 @@ const fs = require('fs'); // ADDED: File System module for persistence
 const app = express();
 const PORT = process.env.PORT || 10000;
 const STATE_FILE = path.join(__dirname, 'orders.json'); // ADDED: Path for state file
+const variationCache = new Map();
 
 // For Square Orders API
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN;
@@ -63,6 +64,50 @@ function broadcast(data) {
       }
     });
   }
+}
+
+async function fetchVariationDetails(catalogObjectId) {
+  if (!catalogObjectId || variationCache.has(catalogObjectId)) {
+    return variationCache.get(catalogObjectId);
+  }
+
+  try {
+    const response = await fetch(
+      `${SQUARE_BASE_URL}/v2/catalog/object/${catalogObjectId}?include_related_objects=true`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${SQUARE_ACCESS_TOKEN}`,
+          "Square-Version": "2024-06-25",
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error(
+        `Error fetching variation ${catalogObjectId}: ${response.status} ${response.statusText}`
+      );
+      return null;
+    }
+
+    const json = await response.json();
+    const variation = json?.object?.item_variation;
+    const item = json?.related_objects?.find((o) => o.type === "ITEM");
+
+    if (variation || item) {
+      const details = {
+        variationName: variation?.name || null,
+        itemName: item?.item_data?.name || null,
+      };
+      variationCache.set(catalogObjectId, details);
+      return details;
+    }
+  } catch (err) {
+    console.error(`Error retrieving catalog variation ${catalogObjectId}:`, err.message);
+  }
+
+  return null;
 }
 
 // Determines the KDS status based on the Square order state
@@ -163,6 +208,24 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "kitchen.html"));
 });
 
+// Lightweight health/status endpoint for uptime monitoring
+app.get('/health', (req, res) => {
+    const allOrders = Object.values(orders);
+    const counts = allOrders.reduce((acc, order) => {
+        const status = order.status;
+        if (status === 'ready') acc.ready++;
+        else if (status === 'cancelled') acc.cancelled++;
+        else acc.active++;
+        return acc;
+    }, { active: 0, ready: 0, cancelled: 0 });
+
+    res.json({
+        status: 'ok',
+        uptimeSeconds: Math.round(process.uptime()),
+        orders: counts,
+    });
+});
+
 // Middleware for Square Webhooks (raw body is required for signature verification)
 // Use bodyParser.json() for other routes
 app.use(bodyParser.json());
@@ -202,25 +265,28 @@ app.post("/square/webhook", async (req, res) => {
     // --- NEW DATA EXTRACTION BLOCK ---
     let orderNumber = fullOrder?.display_id || fullOrder?.order_number || orderId.slice(-6);
     
-    // 1. ITEMS (with VARIATION name)
+    // 1. ITEMS (with VARIATION name from Square catalog)
     let items = existing.items || [];
     if (fullOrder && Array.isArray(fullOrder.line_items)) {
-        items = fullOrder.line_items.map((li, index) => {
-            const baseName = li.name || "Item";
-            const variationName = li.variation_name ? li.variation_name.trim() : null;
-            // Combines Name and Variation if they are different
-            const displayName = (variationName && variationName.toLowerCase() !== baseName.toLowerCase())
-                ? `${baseName} - ${variationName}`
-                : baseName;
+        const itemPromises = fullOrder.line_items.map(async (li, index) => {
+            const variationDetails = await fetchVariationDetails(li.catalog_object_id);
+            const baseName = li.name || variationDetails?.itemName || "Item";
+            const variationName = li.variation_name?.trim() || variationDetails?.variationName || null;
+            const displayName =
+                variationName && variationName.toLowerCase() !== baseName.toLowerCase()
+                    ? `${baseName} - ${variationName}`
+                    : baseName;
 
-            return { 
-                name: displayName, 
-                quantity: toNumberQuantity(li.quantity || 1), 
-                modifiers: li.modifiers?.map(m => m.name).filter(Boolean) || [], 
+            return {
+                name: displayName,
+                quantity: toNumberQuantity(li.quantity || 1),
+                modifiers: li.modifiers?.map((m) => m.name).filter(Boolean) || [],
                 // CRITICAL: Preserve item completion status if it exists, otherwise default to false
-                completed: existing.items?.[index]?.completed ?? false, 
+                completed: existing.items?.[index]?.completed ?? false,
             };
         });
+
+        items = await Promise.all(itemPromises);
     }
 
     // 2. SERVICE TYPE (Fulfillment Type)
