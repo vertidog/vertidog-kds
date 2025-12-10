@@ -151,14 +151,14 @@
       MAIN SCROLLER & CARD LAYOUT
     --------------------------------*/
     main {
-      flex: 1; 
+      flex: 1; /* Make main take up all remaining vertical space */
       padding: 4.5rem 0.9rem 0.9rem 0.9rem;
       overflow-x: scroll; 
       overflow-y: hidden; 
       min-height: 220px;
       -webkit-overflow-scrolling: touch; 
       
-      /* Default to horizontal flex layout for 1-row scrolling */
+      /* FIX: Default to horizontal flex layout for 1-row scrolling */
       display: flex; 
       gap: 0.9rem;
     }
@@ -168,37 +168,29 @@
     main::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 6px; }
     main::-webkit-scrollbar-thumb:hover { background: #8e44ad; }
 
-    /* --- FIX FOR DYNAMIC HEIGHT IN 1-ROW VIEW --- */
+    /* Fix: Bubble only takes fixed width and full height of main */
     .bubble {
       position: relative;
       flex: 0 0 var(--card-width);
-      height: auto; /* Allow card to shrink-wrap its content (dynamic height) */
+      height: 100%; 
       align-self: flex-start;
-      margin-bottom: 0.9rem; /* Add bottom margin for horizontal separation */
-    }
-    .bubble:last-child {
-        margin-right: 0.9rem; /* Ensures the last card has space to the right edge */
     }
 
-    /* --- MULTI-ROW GRID LAYOUT --- */
     .multi-row-container {
         display: flex;
         flex-wrap: wrap; 
         flex-direction: column; 
+        /* gap: 0.9rem; -- Removed here, added to main, vertical gap handled by margin-bottom */
         height: 100%; 
         width: max-content; 
     }
 
-    /* Re-enforce CALCULATED FIXED HEIGHT for multi-row view */
+    /* Fix: Re-add vertical margin when in multi-row view */
     .multi-row-container .bubble {
         flex: unset;
         width: var(--card-width);
-        /* Calculate height to perfectly fit N rows, accounting for margin/gap */
         height: calc((100% - (var(--grid-rows) * 0.9rem) + 0.9rem) / var(--grid-rows)); 
         margin-bottom: 0.9rem; 
-    }
-    .multi-row-container .bubble:last-child {
-        margin-right: 0; /* No right margin in column-wrap view */
     }
     
     .empty-state-wrapper {
@@ -363,8 +355,7 @@
       display: flex;
       flex-direction: column;
       gap: 0.55rem;
-      /* Only allow vertical scroll in multi-row view */
-      overflow-y: var(--grid-rows) > 1 ? auto : unset; 
+      overflow-y: auto; 
       padding-bottom: 0.25rem;
     }
     .bubble-items::-webkit-scrollbar { width: 4px; }
@@ -394,8 +385,7 @@
         min-width: 0;
     }
     .item-name {
-      /* --- INCREASED FONT SIZE --- */
-      font-size: 1.3rem; 
+      font-size: 1.15rem; 
       font-weight: 800;
       color: var(--text);
       overflow: hidden;
@@ -405,8 +395,7 @@
       transition: color 0.2s;
     }
     .item-qty {
-      /* --- INCREASED FONT SIZE --- */
-      font-size: 1.15rem; 
+      font-size: 1.05rem;
       font-weight: 900;
       padding: 0.12rem 0.5rem;
       border-radius: 999px;
@@ -420,7 +409,7 @@
     .item-check {
         margin-right: 0.5rem;
         color: var(--ready); /* Green checkmark */
-        font-size: 1.4rem; /* Adjusted for new font size */
+        font-size: 1.3rem;
         opacity: 0;
         transition: opacity 0.3s;
     }
@@ -435,8 +424,7 @@
 
     .item-mods {
       margin-top: 0.15rem;
-      /* --- INCREASED FONT SIZE --- */
-      font-size: 1.05rem; 
+      font-size: 0.98rem; 
       color: var(--ready); /* Green for Modifiers */
       font-style: italic;
       line-height: 1.2;
@@ -645,17 +633,6 @@
     window.setRows = function(rows) {
         currentRows = rows;
         document.documentElement.style.setProperty('--grid-rows', rows);
-        
-        // This is a CSS-in-JS hack to control overflow-y in the bubble-items based on rows.
-        // It's cleaner to handle this in JS than complex CSS variable logic.
-        const bubbles = document.querySelectorAll('.bubble');
-        bubbles.forEach(bubble => {
-            const itemsContainer = bubble.querySelector('.bubble-items');
-            if (itemsContainer) {
-                itemsContainer.style.overflowY = rows > 1 ? 'auto' : 'unset';
-            }
-        });
-        
         localStorage.setItem('kdsRows', rows);
         render();
         toggleOptionsModal();
@@ -777,13 +754,9 @@
           break;
 
         case "SYNC_STATE":
-          // The server now sends ALL orders. We clear and re-add.
-          Object.keys(orders).forEach(key => delete orders[key]);
           (msg.orders || []).forEach((o) => addOrUpdate(o.orderNumber, o.status || "new", o));
           if (!selectedOrderNumber && (msg.orders || []).length > 0) {
-            // Attempt to select an active order if one exists
-            const activeOrder = Object.values(orders).find(o => o.status !== 'done' && o.status !== 'cancelled');
-            selectedOrderNumber = activeOrder ? activeOrder.orderNumber : null;
+            selectedOrderNumber = msg.orders[0].orderNumber;
           }
           break;
 
@@ -798,7 +771,7 @@
             }
             // If all items are complete, mark the whole order ready
             if(msg.allCompleted) {
-                markReady(msg.orderNumber, { playSound: false }); 
+                markReady(msg.orderNumber, { playSound: false }); // Don't double-play sound if order ready was handled on server
             }
             render();
             break;
@@ -943,7 +916,7 @@
           }));
       } else {
           // Initialize completion status if items array structure changed
-          updatedItems = updatedItems.map(item => ({...item, completed: item.completed ?? false})); // Use provided completed status if available
+          updatedItems = updatedItems.map(item => ({...item, completed: false}));
       }
 
       orders[orderNumber] = {
@@ -1265,12 +1238,6 @@
           bubbleContainer.appendChild(b);
           // Initial timer update to set the color bar immediately
           updateTimers(); 
-          
-          // Apply overflow-y rule based on currentRows for the newly created bubble
-          const itemsContainer = b.querySelector('.bubble-items');
-          if (itemsContainer) {
-              itemsContainer.style.overflowY = currentRows > 1 ? 'auto' : 'unset';
-          }
         });
       }
     }
