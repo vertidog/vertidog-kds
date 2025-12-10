@@ -436,6 +436,19 @@ app.post("/square/webhook", async (req, res) => {
       (sum, it) => sum + toNumberQuantity(it.quantity),
       0
     );
+
+    const fulfillment = Array.isArray(fullOrder?.fulfillments) ? fullOrder.fulfillments[0] : null;
+    const diningOption =
+      (fullOrder?.dining_option && fullOrder.dining_option.name) ||
+      (fulfillment?.type || null) ||
+      existing.diningOption ||
+      null;
+
+    const notes =
+      fullOrder?.note ||
+      (fulfillment?.pickup_details && fulfillment.pickup_details.note) ||
+      existing.notes ||
+      null;
     const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
     const eventTypeLower = typeof eventType === "string" ? eventType.toLowerCase() : "";
 
@@ -464,6 +477,8 @@ app.post("/square/webhook", async (req, res) => {
       items: finalItems,
       isPrioritized, // Include priority
       stateFromSquare,
+      diningOption,
+      notes,
     };
 
     orders[orderId] = merged;
@@ -495,6 +510,8 @@ app.get("/test-order", (req, res) => {
     status: "new",
     createdAt: Date.now(),
     isPrioritized: false, // ADDED: Default priority status
+    diningOption: "For Here",
+    notes: "Extra napkins, light ice.",
     items: [
       { name: "Hot Dog", quantity: 1, modifiers: ["No Pickle", "Extra Ketchup"], completed: false }, // ADDED: Item completion status
       { name: "Coke", quantity: 1, modifiers: [], completed: false },
