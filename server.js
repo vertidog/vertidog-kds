@@ -9,9 +9,11 @@ const bodyParser = require("body-parser");
 const path = require("path");
 // NOTE: crypto module needed for signature verification (postponed)
 // const crypto = require("crypto"); 
+const fs = require('fs'); // <--- ADDED: File System for persistence
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+const STATE_FILE = path.join(__dirname, 'orders.json'); // <--- ADDED: State file path
 
 // For Square Orders API
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN;
@@ -23,6 +25,36 @@ const SQUARE_BASE_URL =
 
 // In-memory store keyed by orderId
 const orders = {};
+
+// ---------------- STATE MANAGEMENT (NEW BLOCK) ----------------
+function loadKDSState() {
+    try {
+        if (fs.existsSync(STATE_FILE)) {
+            const data = fs.readFileSync(STATE_FILE, 'utf8');
+            if (data.trim().length > 0) {
+                // Assign properties to the existing 'orders' const map
+                Object.assign(orders, JSON.parse(data)); 
+                console.log(`Loaded KDS state from ${STATE_FILE}.`);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading state file:', error.message);
+        // If file load fails, start with an empty state
+    }
+}
+
+function saveKDSState() {
+    try {
+        // Save the entire in-memory state
+        fs.writeFileSync(STATE_FILE, JSON.stringify(orders, null, 2), 'utf8');
+    } catch (error) {
+        console.error('Error saving state file:', error.message);
+    }
+}
+
+// EXECUTE STATE LOAD ON STARTUP
+loadKDSState();
+// ---------------- END STATE MANAGEMENT ----------------
 
 // ---------------- KDS SEQUENTIAL COUNTER (FOR TEST ENDPOINT ONLY) ----------------
 // This counter is only used by the /test-order endpoint to simulate clean Square numbers
@@ -115,6 +147,7 @@ wss.on("connection", (ws) => {
           orderToMark.status = "ready";
           // NOTE: We rely on the orderId key here for server-side persistence
           orders[orderToMark.orderId] = orderToMark; 
+          saveKDSState(); // <--- ADDED: Persist on KDS action
 
           // Broadcast confirmation back to ALL clients
           broadcast({
@@ -131,6 +164,7 @@ wss.on("connection", (ws) => {
         if (orderToMark) {
           orderToMark.status = "in-progress";
           orders[orderToMark.orderId] = orderToMark;
+          saveKDSState(); // <--- ADDED: Persist on KDS action
 
           console.log(`Order ${data.orderNumber} RECALLED/REACTIVATED.`);
           
@@ -148,6 +182,7 @@ wss.on("connection", (ws) => {
         if (orderToMark) {
           orderToMark.status = "cancelled";
           orders[orderToMark.orderId] = orderToMark;
+          saveKDSState(); // <--- ADDED: Persist on KDS action
           
           console.log(`Order ${data.orderNumber} CANCELLED by KDS user.`);
 
@@ -161,8 +196,8 @@ wss.on("connection", (ws) => {
         ws.send(
           JSON.stringify({
             type: "SYNC_STATE",
-            // Only send active orders for initial KDS screen load
-            orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
+            // FIX: Send ALL orders on sync request
+            orders: Object.values(orders), // Removed filter
           })
         );
       }
@@ -171,11 +206,12 @@ wss.on("connection", (ws) => {
     }
   });
 
-  // Initial sync request (only send active orders)
+  // Initial sync request
   ws.send(
     JSON.stringify({
       type: "SYNC_STATE",
-      orders: Object.values(orders).filter(o => o.status !== 'done' && o.status !== 'cancelled'),
+      // FIX: Send ALL orders on initial connect
+      orders: Object.values(orders), // Removed filter
     })
   );
 
@@ -321,6 +357,7 @@ app.post("/square/webhook", async (req, res) => {
     };
 
     orders[orderId] = merged;
+    saveKDSState(); // <--- ADDED: Persist order state after webhook update
 
     console.log("✅ Final KDS order object:", merged);
 
@@ -379,6 +416,7 @@ app.get("/test-order", (req, res) => {
   // Use toNumberQuantity for safety
   order.itemCount = order.items.reduce((sum, it) => sum + toNumberQuantity(it.quantity), 0);
   orders[orderId] = order;
+  saveKDSState(); // <--- ADDED: Persist test order
 
   broadcast({
     type: "NEW_ORDER",
