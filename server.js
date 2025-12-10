@@ -3,6 +3,8 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 
+// Ensure you have a 'public' folder in the same directory as server.js
+// and the 'kitchen.html' file is inside that 'public' folder.
 const PORT = process.env.PORT || 10000;
 const STATE_FILE = path.join(__dirname, 'orders.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -141,7 +143,7 @@ wss.on('connection', ws => {
                     }));
                     break;
                 
-                // NEW: Handle Item Completion Toggle
+                // Handle Item Completion Toggle
                 case 'ITEM_COMPLETED':
                     if (orders[msg.orderNumber] && orders[msg.orderNumber].items[msg.itemIndex]) {
                         const order = orders[msg.orderNumber];
@@ -153,45 +155,47 @@ wss.on('connection', ws => {
                             order.status = 'in-progress';
                         }
                         
-                        saveKDSState();
-                        broadcast({
-                            type: 'ITEM_COMPLETED_CONFIRM',
-                            orderNumber: msg.orderNumber,
-                            itemIndex: msg.itemIndex,
-                            completed: msg.completed,
-                            allCompleted: msg.allCompleted 
-                        });
-                        
-                        // If all items are complete, transition the order status
+                        // If all items are complete, transition the order status to ready
                         if(msg.allCompleted) {
                             order.status = 'ready';
-                            broadcast({ type: 'ORDER_READY', orderNumber: msg.orderNumber });
-                        } else if (order.status !== 'ready' && order.status !== 'in-progress') {
-                            // Broadcast general status update if it went from 'new' to 'in-progress'
-                            broadcast({ 
-                                type: 'ORDER_STATUS_UPDATE', 
-                                orderNumber: msg.orderNumber, 
-                                status: order.status 
+                            saveKDSState();
+                            broadcast({ type: 'ORDER_READY_CONFIRM', orderNumber: msg.orderNumber });
+                        } else {
+                            saveKDSState();
+                            broadcast({
+                                type: 'ITEM_COMPLETED_CONFIRM',
+                                orderNumber: msg.orderNumber,
+                                itemIndex: msg.itemIndex,
+                                completed: msg.completed,
+                                allCompleted: msg.allCompleted 
                             });
+                            
+                            // Broadcast general status update if it went from 'new' to 'in-progress'
+                            if (order.status !== 'ready') {
+                                broadcast({ 
+                                    type: 'ORDER_STATUS_UPDATE', 
+                                    orderNumber: msg.orderNumber, 
+                                    status: order.status 
+                                });
+                            }
                         }
                     }
                     break;
 
-                // NEW: Handle Priority Toggle
+                // Handle Priority Toggle
                 case 'ORDER_PRIORITY_TOGGLE':
                     if (orders[msg.orderNumber]) {
                         orders[msg.orderNumber].isPrioritized = msg.isPrioritized;
                         saveKDSState();
                         broadcast({
-                            type: 'ORDER_STATUS_UPDATE',
+                            type: 'ORDER_PRIORITY_TOGGLE',
                             orderNumber: msg.orderNumber,
-                            status: orders[msg.orderNumber].status,
                             isPrioritized: msg.isPrioritized
                         });
                     }
                     break;
 
-                case 'ORDER_READY': // Status cycle to ready
+                case 'ORDER_READY': // Status cycle to ready (full order completion)
                     if (orders[msg.orderNumber]) {
                         orders[msg.orderNumber].status = 'ready';
                         orders[msg.orderNumber].items.forEach(item => item.completed = true); // Mark all items complete
