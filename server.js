@@ -254,7 +254,7 @@ app.post("/square/webhook", async (req, res) => {
     }
     // ---------- END ORDER NUMBER ASSIGNMENT ----------
 
-    // ---------- ITEMS (UPDATED LOGIC) ----------
+    // ---------- ITEMS ----------
     let items = [];
     if (fullOrder && Array.isArray(fullOrder.line_items)) {
       items = fullOrder.line_items.map((li) => {
@@ -284,7 +284,6 @@ app.post("/square/webhook", async (req, res) => {
       // reuse items from previous event for same order
       items = orders[orderId].items;
     }
-    // ---------- END ITEMS (UPDATED LOGED) ----------
 
     const itemCount = items.reduce(
       (sum, it) => sum + toNumberQuantity(it.quantity),
@@ -307,6 +306,7 @@ app.post("/square/webhook", async (req, res) => {
     // AND it has been touched (i.e., status is NOT 'new'), we NEVER override 
     // the existing KDS status with a general Square update (like 'OPEN').
     // This locks the order state based on kitchen action.
+    // We explicitly exclude 'cancelled' from this check, as Rule 1 handles it.
     if (existing.status && existing.status !== 'new' && kdsStatus !== 'cancelled') {
         kdsStatus = existing.status;
     }
@@ -327,10 +327,22 @@ app.post("/square/webhook", async (req, res) => {
 
     console.log("✅ Final KDS order object:", merged);
 
-    broadcast({
-      type: "NEW_ORDER",
-      ...merged,
-    });
+    // --- FIX: Prevent re-broadcasting orders that are already marked done/cancelled by KDS ---
+    let shouldBroadcastWebhook = true;
+        
+    // If the KDS status hasn't changed, and it's settled on a non-active state, suppress the broadcast.
+    if (existing.status && merged.status === existing.status) {
+        if (merged.status === 'cancelled' || merged.status === 'ready') {
+             shouldBroadcastWebhook = false;
+        }
+    }
+
+    if (shouldBroadcastWebhook) {
+        broadcast({
+          type: "NEW_ORDER",
+          ...merged,
+        });
+    }
 
     return res.status(200).send("ok");
   } catch (err) {
