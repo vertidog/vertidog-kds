@@ -26,6 +26,7 @@
 
       /* Fixed width for a card when in a single row or narrow grid */
       --card-width: 360px;
+      --card-min-height: 360px;
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -164,6 +165,7 @@
       position: relative;
       flex: 0 0 var(--card-width);
       height: auto;
+      min-height: var(--card-min-height);
       align-self: flex-start;
     }
 
@@ -1184,7 +1186,7 @@
           b.innerHTML = `
             <div class="bubble-top-bar ${o.status !== 'ready' ? o.status : ''}">
               <div class="bubble-top-left">
-                <div class="order-number-tag">#${escapeHtml(o.orderNumber)} ${priorityBtn}</div>
+                <div class="order-number-tag">${escapeHtml(o.orderNumber)}${priorityBtn ? ` ${priorityBtn}` : ``}</div>
                 <div class="order-meta-row">
                   ${diningOption ? `<span class=\\"dining-chip\\">${diningOption}</span>` : ``}
                   <span class="status-chip">${statusText}</span>
