@@ -113,29 +113,6 @@ function broadcast(msgObj) {
   });
 }
 
-function deriveDiningOption(order) {
-  if (!order || !Array.isArray(order.fulfillments)) return null;
-  const fulfillment = order.fulfillments.find((f) => f && f.type);
-  if (!fulfillment) return null;
-
-  const type = String(fulfillment.type).toUpperCase();
-  switch (type) {
-    case "PICKUP":
-      return "Pick-up";
-    case "DELIVERY":
-      return "Delivery";
-    case "SHIPMENT":
-      return "Shipment";
-    case "DINE_IN":
-      return "For Here";
-    case "TAKEOUT":
-    case "TAKE_OUT":
-      return "To Go";
-    default:
-      return fulfillment.type;
-  }
-}
-
 // Fetch full order from Square if webhook was minimal
 async function fetchOrderFromSquare(orderId) {
   if (!SQUARE_ACCESS_TOKEN) {
@@ -433,12 +410,6 @@ app.post("/square/webhook", async (req, res) => {
       // reuse items from previous event for same order
       items = orders[orderId].items;
     }
-
-    const diningOption = deriveDiningOption(fullOrder) || existing.diningOption || null;
-    const customerNote =
-      (fullOrder && (fullOrder.customer_note || fullOrder.note)) ||
-      existing.customerNote ||
-      null;
     
     // Get existing state for merge
     const existing = orders[orderId] || {};
@@ -493,8 +464,6 @@ app.post("/square/webhook", async (req, res) => {
       items: finalItems,
       isPrioritized, // Include priority
       stateFromSquare,
-      diningOption,
-      customerNote,
     };
 
     orders[orderId] = merged;
