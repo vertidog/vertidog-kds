@@ -1223,8 +1223,8 @@
              : `<button class="recall-btn" onclick="window.recallOrder('${o.orderNumber}', event)">RECALL</button>`;
           
           const priorityIcon = o.isPrioritized ? '⚠️' : '';
-          const priorityBtn = isActiveStatus 
-             ? `<button class="prioritize-btn ${o.isPrioritized ? 'is-prioritized' : ''}" onclick="window.togglePriority('${o.orderNumber}', event)">${o.isPrioritized ? 'PRIORITIZED' : 'PRIORITIZE'}</button>` 
+          const priorityBtn = (o.status === 'new' || o.status === 'in-progress')
+             ? `<button class="prioritize-btn ${o.isPrioritized ? 'is-prioritized' : ''}" onclick="window.togglePriority('${o.orderNumber}', event)">${o.isPrioritized ? 'PRIORITIZED' : 'PRIORITIZE'}</button>`
              : '';
 
           const timerHtml = currentFilter === 'active' 
