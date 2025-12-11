@@ -18,9 +18,9 @@
       --accent: #a855f7;
       --radius: 16px;
       
-      /* Time Alert Colors (3 mins / 5 mins) */
-      --time-alert: #f59e0b;   /* Amber (3 mins) */
-      --time-critical: #ef4444; /* Red (5 mins) */
+      /* Time Alert Colors */
+      --time-alert: #ffeb3b;   /* Bright Yellow */
+      --time-critical: #ef4444; /* Red */
       --time-default: #1f2937;  /* Dark text color for timer */
 
       /* Fixed width for a card when in a single row or narrow grid */
@@ -497,6 +497,11 @@
         border-radius: 0 0 var(--radius) var(--radius);
     }
 
+    .bubble.prioritized .priority-section {
+        background: #fff7ed;
+        box-shadow: inset 0 0 0 2px rgba(251, 191, 36, 0.55);
+    }
+
     .order-meta-row {
         display: flex;
         align-items: center;
@@ -609,13 +614,34 @@
         .replaceAll("'", "&#039;");
     }
 
+    function toTimestamp(value) {
+      if (!value) return null;
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
     function formatTimeElapsed(createdAt) {
-      if (!createdAt) return "0s";
-      const secondsElapsed = Math.floor(Math.max(0, Date.now() - createdAt) / 1000);
+      const timestamp = toTimestamp(createdAt);
+      if (!timestamp) return "0s";
+
+      const secondsElapsed = Math.floor(Math.max(0, Date.now() - timestamp) / 1000);
       const minutes = Math.floor(secondsElapsed / 60);
       const seconds = secondsElapsed % 60;
       if (minutes > 0) return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
       return `${seconds}s`;
+    }
+
+    function getDisplayStatus(order) {
+      const statusValue = normalizeStatus(order.status);
+      if (statusValue === "new") {
+        const createdAtTs = toTimestamp(order.createdAt);
+        const secondsElapsed = createdAtTs
+          ? Math.floor(Math.max(0, Date.now() - createdAtTs) / 1000)
+          : 0;
+        if (secondsElapsed >= 120) return "in-progress";
+      }
+      return statusValue;
     }
 
     function normalizeStatus(status) {
@@ -860,7 +886,7 @@
       orders[orderNumber] = {
         orderNumber,
         status: normalizedStatus,
-        createdAt: data.createdAt || existing.createdAt || Date.now(),
+        createdAt: toTimestamp(data.createdAt || existing.createdAt) || Date.now(),
         itemCount: data.itemCount ?? existing.itemCount ?? null,
         items: updatedItems,
         orderId: data.orderId || existing.orderId,
@@ -984,6 +1010,19 @@
         render();
     }
 
+    function applyHeaderState(topBarEl, state) {
+      if (state === 'critical') {
+        topBarEl.style.background = 'var(--time-critical)';
+        topBarEl.style.color = '#fff';
+      } else if (state === 'alert') {
+        topBarEl.style.background = 'var(--time-alert)';
+        topBarEl.style.color = '#1f2937';
+      } else {
+        topBarEl.style.background = '';
+        topBarEl.style.color = '';
+      }
+    }
+
     // Function to update timers and color codes
     function updateTimers() {
       document.querySelectorAll(".bubble").forEach((bubbleEl) => {
@@ -991,26 +1030,71 @@
         const order = orders[orderNumber];
         const timerEl = bubbleEl.querySelector(".bubble-timer");
         const topBarEl = bubbleEl.querySelector(".bubble-top-bar");
+        const statusChipEl = bubbleEl.querySelector('.status-chip');
 
         if (order && timerEl && topBarEl) {
-            const secondsElapsed = Math.floor(Math.max(0, Date.now() - order.createdAt) / 1000);
+            const createdAtTs = toTimestamp(order.createdAt);
+            const secondsElapsed = createdAtTs
+              ? Math.floor(Math.max(0, Date.now() - createdAtTs) / 1000)
+              : 0;
 
-            timerEl.textContent = formatTimeElapsed(order.createdAt);
+            timerEl.textContent = formatTimeElapsed(createdAtTs);
+
+            const displayStatus = getDisplayStatus(order);
+            const hasStatusChanged = bubbleEl.dataset.displayStatus !== displayStatus;
+
+            if (hasStatusChanged) {
+              bubbleEl.dataset.displayStatus = displayStatus;
+              bubbleEl.classList.remove('new', 'in-progress', 'ready', 'done', 'canceled');
+              bubbleEl.classList.add(displayStatus);
+              topBarEl.classList.remove('new', 'in-progress', 'ready', 'done', 'canceled');
+              if (displayStatus !== 'ready') topBarEl.classList.add(displayStatus);
+
+              if (statusChipEl) {
+                statusChipEl.textContent =
+                  displayStatus === 'new' ? 'NEW' :
+                  displayStatus === 'in-progress' ? 'IN PROGRESS' :
+                  displayStatus === 'ready' ? 'READY' :
+                  displayStatus === 'done' ? 'COMPLETED' : 'CANCELED';
+              }
+            }
 
             topBarEl.classList.remove('alert', 'critical');
+            applyHeaderState(topBarEl, null);
 
-            if (order.status !== 'ready' && order.status !== 'done') {
-              if (secondsElapsed >= 300) { // 5 minutes
-                  topBarEl.classList.add('critical');
-              } else if (secondsElapsed >= 180) { // 3 minutes
-                  topBarEl.classList.add('alert');
+            if (displayStatus !== 'ready' && displayStatus !== 'done') {
+              const alertThreshold = 180; // 3 minutes
+              const criticalThreshold = 300; // 5 minutes
+
+              if (secondsElapsed >= criticalThreshold) {
+                topBarEl.classList.add('critical');
+                applyHeaderState(topBarEl, 'critical');
+              } else if (secondsElapsed >= alertThreshold) {
+                topBarEl.classList.add('alert');
+                applyHeaderState(topBarEl, 'alert');
               }
             }
         }
       });
     }
-    setInterval(updateTimers, 1000);
-    
+
+    let timerRaf = null;
+    let lastTimerUpdate = 0;
+    function startTimerLoop() {
+      const tick = (now) => {
+        if (!lastTimerUpdate || now - lastTimerUpdate >= 1000) {
+          updateTimers();
+          lastTimerUpdate = now;
+        }
+        timerRaf = requestAnimationFrame(tick);
+      };
+
+      if (timerRaf) cancelAnimationFrame(timerRaf);
+      timerRaf = requestAnimationFrame(tick);
+    }
+
+    startTimerLoop();
+
     /* -----------------------------
       RENDERING
     --------------------------------*/
@@ -1096,13 +1180,14 @@
         bubbleContainer.appendChild(emptyStateWrapper);
       } else {
         filteredList.forEach((o) => {
-          const statusValue = normalizeStatus(o.status);
+          const displayStatus = getDisplayStatus(o);
           const isSelected = o.orderNumber === selectedOrderNumber;
-          const isActiveStatus = (statusValue === "new" || statusValue === "in-progress" || statusValue === "ready");
+          const isActiveStatus = (displayStatus === "new" || displayStatus === "in-progress" || displayStatus === "ready");
 
           const b = document.createElement("div");
-          b.className = `bubble ${statusValue}${isSelected ? " selected" : ""}`;
+          b.className = `bubble ${displayStatus}${o.isPrioritized ? " prioritized" : ""}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
+          b.dataset.displayStatus = displayStatus;
           
           if (isActiveStatus) {
               b.onmousedown = handleLongPressStart;
@@ -1123,10 +1208,10 @@
           };
 
           const statusText =
-            statusValue === "new" ? "NEW" :
-            statusValue === "in-progress" ? "IN PROGRESS" :
-            statusValue === "ready" ? "READY" :
-            statusValue === "done" ? "COMPLETED" : "CANCELED";
+            displayStatus === "new" ? "NEW" :
+            displayStatus === "in-progress" ? "IN PROGRESS" :
+            displayStatus === "ready" ? "READY" :
+            displayStatus === "done" ? "COMPLETED" : "CANCELED";
 
           const itemCountText =
             o.itemCount ? `${o.itemCount} item${o.itemCount > 1 ? "s" : ""}` : "";
@@ -1153,7 +1238,7 @@
           const itemsHtml = renderItemsHtml(o.orderNumber, o.items, 99);
           
           b.innerHTML = `
-            <div class="bubble-top-bar ${o.status !== 'ready' ? o.status : ''}">
+            <div class="bubble-top-bar ${displayStatus !== 'ready' ? displayStatus : ''}">
               <div class="bubble-top-left">
                 <div class="order-number-tag">${escapeHtml(o.orderNumber)}</div>
                 <div class="order-meta-row">
