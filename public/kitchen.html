@@ -200,6 +200,7 @@
       border: 2px solid transparent;
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
       transition: box-shadow 0.2s ease-out, border-color 0.2s ease-out, opacity 0.3s ease-out;
+      transform: none;
       user-select: none;
       touch-action: manipulation;
       padding: 0;
@@ -208,7 +209,10 @@
       background: var(--card-bg);
       color: var(--text);
     }
-    .bubble:active { cursor: grabbing; }
+    .bubble:active {
+      cursor: grabbing;
+      transform: none;
+    }
 
     .bubble.selected {
       box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.75), 0 12px 26px rgba(0, 0, 0, 0.65);
