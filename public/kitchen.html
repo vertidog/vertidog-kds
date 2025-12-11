@@ -25,7 +25,7 @@
 
       /* Fixed width for a card when in a single row or narrow grid */
       --card-width: 360px;
-      --card-min-height: 360px;
+      --card-max-height: calc(100vh - 7.5rem);
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -164,8 +164,10 @@
       position: relative;
       flex: 0 0 var(--card-width);
       height: auto;
-      min-height: var(--card-min-height);
+      min-height: 0;
+      max-height: var(--card-max-height);
       align-self: flex-start;
+      overflow: hidden;
     }
 
     .empty-state-wrapper {
@@ -269,6 +271,7 @@
 
     .bubble-body {
         flex: 1;
+        min-height: 0;
         padding: 0.85rem 0.9rem 0.85rem;
         display: flex;
         flex-direction: column;
