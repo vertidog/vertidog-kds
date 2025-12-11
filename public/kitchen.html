@@ -17,6 +17,11 @@
       --muted: #6b7280;
       --accent: #a855f7;
       --radius: 16px;
+
+      --page-bg: radial-gradient(circle at top, #111827 0, #020617 50%, #000 100%);
+      --header-bg: rgba(15, 23, 42, 0.9);
+      --header-border: rgba(148, 163, 184, 0.25);
+      --header-text: #fff;
       
       /* Time Alert Colors */
       --time-alert: #ffeb3b;   /* Bright Yellow */
@@ -32,11 +37,19 @@
     body {
       margin: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: radial-gradient(circle at top, #111827 0, #020617 50%, #000 100%);
+      background: var(--page-bg);
       color: var(--text);
       height: 100vh;
       display: flex;
       flex-direction: column;
+    }
+
+    body.light-theme {
+      --page-bg: radial-gradient(circle at top, #f8fafc 0, #e2e8f0 50%, #cbd5e1 100%);
+      --header-bg: rgba(255, 255, 255, 0.9);
+      --header-border: rgba(148, 163, 184, 0.35);
+      --header-text: #0f172a;
+      --muted: #475569;
     }
 
     /* HEADER - Fixed to top, background remains dark */
@@ -45,8 +58,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(15, 23, 42, 0.9);
-      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--header-border);
       backdrop-filter: blur(10px);
       z-index: 10;
       gap: 1rem;
@@ -56,7 +69,7 @@
       top: 0; 
       left: 0; 
       width: 100%;
-      color: #fff; /* Ensure header text is white */
+      color: var(--header-text);
     }
     header .brand {
       display: flex;
@@ -125,7 +138,7 @@
       align-items: center;
       justify-content: center;
       background: transparent;
-      border: 1px solid rgba(148, 163, 184, 0.4);
+      border: 1px solid var(--header-border);
       flex: 0 0 auto;
       transition: all 0.4s;
     }
@@ -133,9 +146,9 @@
       height: 2.5rem;
       width: 2.5rem;
       border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      background: rgba(15, 23, 42, 0.9);
-      color: #fff;
+      border: 1px solid var(--header-border);
+      background: var(--header-bg);
+      color: var(--header-text);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -598,6 +611,9 @@
         <button class="icon-button" id="mute-toggle" aria-label="Toggle TTS mute" title="Mute TTS">
           🔊
         </button>
+        <button class="icon-button" id="theme-toggle" aria-label="Toggle theme" title="Switch to light theme">
+          🌙
+        </button>
         <div class="status-pill" id="connection-status">
             <span class="dot"></span>
         </div>
@@ -620,6 +636,7 @@
     const bubbleContainer = document.getElementById("bubble-container");
     const connectionStatus = document.getElementById("connection-status");
     const muteToggle = document.getElementById("mute-toggle");
+    const themeToggle = document.getElementById("theme-toggle");
     const readySound = document.getElementById("ready-sound");
     
     const activeCountEl = document.getElementById("active-count");
@@ -632,12 +649,14 @@
 
     let pressTimer = null;
     let isLongPress = false;
-    const LONG_PRESS_THRESHOLD = 700; 
+    const LONG_PRESS_THRESHOLD = 700;
 
     let preferredVoice = null;
     let announcementQueue = [];
     let isAnnouncing = false;
     let ttsMuted = false;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    let themePreference = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
 
     const storedMutePreference = localStorage.getItem('ttsMuted');
     if (storedMutePreference !== null) {
@@ -706,6 +725,34 @@
       return lower;
     }
     
+    /* -----------------------------
+      THEME TOGGLE
+    --------------------------------*/
+
+    function updateThemeButton(theme) {
+      const isLight = theme === 'light';
+      themeToggle.textContent = isLight ? '🌞' : '🌙';
+      themeToggle.setAttribute('aria-pressed', String(isLight));
+      themeToggle.title = isLight ? 'Switch to dark theme' : 'Switch to light theme';
+    }
+
+    function applyTheme(theme) {
+      const normalized = theme === 'light' ? 'light' : 'dark';
+      document.body.classList.toggle('light-theme', normalized === 'light');
+      document.body.classList.toggle('dark-theme', normalized === 'dark');
+      localStorage.setItem('theme', normalized);
+      themePreference = normalized;
+      updateThemeButton(normalized);
+    }
+
+    function toggleTheme() {
+      applyTheme(themePreference === 'light' ? 'dark' : 'light');
+    }
+
+    updateThemeButton(themePreference);
+    applyTheme(themePreference);
+    themeToggle.addEventListener('click', toggleTheme);
+
     /* -----------------------------
       TTS SETUP
     --------------------------------*/
