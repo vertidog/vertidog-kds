@@ -119,15 +119,34 @@
 
     /* Connection Status Pill (Icon Only) */
     header .status-pill {
-      padding: 0.5rem 0.5rem; 
+      padding: 0.5rem 0.5rem;
       border-radius: 999px;
       display: flex;
       align-items: center;
       justify-content: center;
       background: transparent;
-      border: 1px solid rgba(148, 163, 184, 0.4); 
+      border: 1px solid rgba(148, 163, 184, 0.4);
       flex: 0 0 auto;
       transition: all 0.4s;
+    }
+    header .icon-button {
+      height: 2.5rem;
+      width: 2.5rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.9);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 0 rgba(168, 85, 247, 0);
+    }
+    header .icon-button:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
     }
     header .dot {
       width: 0.7rem; 
@@ -576,6 +595,9 @@
       <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button class="icon-button" id="mute-toggle" aria-label="Toggle TTS mute" title="Mute TTS">
+          🔊
+        </button>
         <div class="status-pill" id="connection-status">
             <span class="dot"></span>
         </div>
@@ -597,6 +619,7 @@
 
     const bubbleContainer = document.getElementById("bubble-container");
     const connectionStatus = document.getElementById("connection-status");
+    const muteToggle = document.getElementById("mute-toggle");
     const readySound = document.getElementById("ready-sound");
     
     const activeCountEl = document.getElementById("active-count");
@@ -614,6 +637,12 @@
     let preferredVoice = null;
     let announcementQueue = [];
     let isAnnouncing = false;
+    let ttsMuted = false;
+
+    const storedMutePreference = localStorage.getItem('ttsMuted');
+    if (storedMutePreference !== null) {
+      ttsMuted = storedMutePreference === 'true';
+    }
 
     // --- Utility Functions ---
 
@@ -681,6 +710,34 @@
       TTS SETUP
     --------------------------------*/
 
+    function updateMuteUI() {
+      const isMuted = ttsMuted === true;
+      muteToggle.textContent = isMuted ? '🔇' : '🔊';
+      muteToggle.setAttribute('aria-pressed', String(isMuted));
+      muteToggle.title = isMuted ? 'Unmute TTS' : 'Mute TTS';
+    }
+
+    function setMuteState(newState) {
+      ttsMuted = Boolean(newState);
+      localStorage.setItem('ttsMuted', String(ttsMuted));
+      updateMuteUI();
+
+      if (ttsMuted) {
+        announcementQueue = [];
+        isAnnouncing = false;
+        try {
+          readySound.pause();
+          readySound.currentTime = 0;
+        } catch (e) {}
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+        }
+      }
+    }
+
+    muteToggle.addEventListener('click', () => setMuteState(!ttsMuted));
+    setMuteState(ttsMuted);
+
     function loadVoices() {
       if (!("speechSynthesis" in window)) return;
       const voices = window.speechSynthesis.getVoices();
@@ -706,11 +763,17 @@
     }
 
     function queueAnnouncement(orderNumber) {
+      if (ttsMuted) return;
       announcementQueue.push(orderNumber);
       if (!isAnnouncing) playNextAnnouncement();
     }
 
     function playNextAnnouncement() {
+      if (ttsMuted) {
+        announcementQueue = [];
+        isAnnouncing = false;
+        return;
+      }
       if (announcementQueue.length === 0) {
         isAnnouncing = false;
         return;
