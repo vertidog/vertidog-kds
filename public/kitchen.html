@@ -502,6 +502,11 @@
         cursor: default;
     }
 
+    .bubble.prioritized .priority-section {
+        background: #fff7ed;
+        box-shadow: inset 0 0 0 2px rgba(251, 191, 36, 0.55);
+    }
+
     .order-meta-row {
         display: flex;
         align-items: center;
@@ -633,6 +638,18 @@
 
       if (minutes > 0) return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
       return `${seconds}.${tenths}s`;
+    }
+
+    function getDisplayStatus(order) {
+      const statusValue = normalizeStatus(order.status);
+      if (statusValue === "new") {
+        const createdAtTs = toTimestamp(order.createdAt);
+        const secondsElapsed = createdAtTs
+          ? Math.floor(Math.max(0, Date.now() - createdAtTs) / 1000)
+          : 0;
+        if (secondsElapsed >= 120) return "in-progress";
+      }
+      return statusValue;
     }
 
     function getDisplayStatus(order) {
