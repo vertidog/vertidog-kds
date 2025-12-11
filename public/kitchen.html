@@ -18,9 +18,9 @@
       --accent: #a855f7;
       --radius: 16px;
       
-      /* Time Alert Colors (3 mins / 5 mins) */
-      --time-alert: #f59e0b;   /* Amber (3 mins) */
-      --time-critical: #ef4444; /* Red (5 mins) */
+      /* Time Alert Colors (small: 2/3 mins, large: 5/7 mins) */
+      --time-alert: #ffeb3b;   /* Bright Yellow (2 or 5 mins) */
+      --time-critical: #ef4444; /* Red (3 or 7 mins) */
       --time-default: #1f2937;  /* Dark text color for timer */
 
       /* Fixed width for a card when in a single row or narrow grid */
@@ -609,9 +609,18 @@
         .replaceAll("'", "&#039;");
     }
 
+    function toTimestamp(value) {
+      if (!value) return null;
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
     function formatTimeElapsed(createdAt) {
-      if (!createdAt) return "0s";
-      const secondsElapsed = Math.floor(Math.max(0, Date.now() - createdAt) / 1000);
+      const timestamp = toTimestamp(createdAt);
+      if (!timestamp) return "0s";
+
+      const secondsElapsed = Math.floor(Math.max(0, Date.now() - timestamp) / 1000);
       const minutes = Math.floor(secondsElapsed / 60);
       const seconds = secondsElapsed % 60;
       if (minutes > 0) return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
@@ -860,7 +869,7 @@
       orders[orderNumber] = {
         orderNumber,
         status: normalizedStatus,
-        createdAt: data.createdAt || existing.createdAt || Date.now(),
+        createdAt: toTimestamp(data.createdAt || existing.createdAt) || Date.now(),
         itemCount: data.itemCount ?? existing.itemCount ?? null,
         items: updatedItems,
         orderId: data.orderId || existing.orderId,
@@ -993,17 +1002,25 @@
         const topBarEl = bubbleEl.querySelector(".bubble-top-bar");
 
         if (order && timerEl && topBarEl) {
-            const secondsElapsed = Math.floor(Math.max(0, Date.now() - order.createdAt) / 1000);
+            const createdAtTs = toTimestamp(order.createdAt);
+            const secondsElapsed = createdAtTs
+              ? Math.floor(Math.max(0, Date.now() - createdAtTs) / 1000)
+              : 0;
 
-            timerEl.textContent = formatTimeElapsed(order.createdAt);
+            timerEl.textContent = formatTimeElapsed(createdAtTs);
 
             topBarEl.classList.remove('alert', 'critical');
 
             if (order.status !== 'ready' && order.status !== 'done') {
-              if (secondsElapsed >= 300) { // 5 minutes
-                  topBarEl.classList.add('critical');
-              } else if (secondsElapsed >= 180) { // 3 minutes
-                  topBarEl.classList.add('alert');
+              const itemCount = Array.isArray(order.items) ? order.items.length : 0;
+              const isSmallOrder = itemCount <= 2;
+              const alertThreshold = isSmallOrder ? 120 : 300; // 2 or 5 minutes
+              const criticalThreshold = isSmallOrder ? 180 : 420; // 3 or 7 minutes
+
+              if (secondsElapsed >= criticalThreshold) {
+                topBarEl.classList.add('critical');
+              } else if (secondsElapsed >= alertThreshold) {
+                topBarEl.classList.add('alert');
               }
             }
         }
