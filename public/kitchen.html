@@ -674,6 +674,10 @@
         .replaceAll("'", "&#039;");
     }
 
+    function renderMultilineText(text) {
+      return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
     function toTimestamp(value) {
       if (!value) return null;
       if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -1392,7 +1396,7 @@
           const timerHtml = `${formatTimeElapsed(o.createdAt)}`;
 
           const diningOption = escapeHtml(o.diningOption || "");
-          const notes = escapeHtml(o.notes || "");
+          const notes = o.notes ? renderMultilineText(o.notes) : "";
           
           const itemsHtml = renderItemsHtml(o.orderNumber, o.items, 99);
           
