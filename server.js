@@ -444,9 +444,19 @@ app.post("/square/webhook", async (req, res) => {
       existing.diningOption ||
       null;
 
+    const notesFromSquare = [
+      fullOrder?.note,
+      fullOrder?.buyer_supplied_note,
+      fulfillment?.pickup_details?.note,
+      fulfillment?.pickup_details?.customer_note,
+      fulfillment?.delivery_details?.note,
+      fulfillment?.delivery_details?.instructions,
+    ]
+      .filter((val) => typeof val === "string" && val.trim().length > 0)
+      .map((val) => val.trim());
+
     const notes =
-      fullOrder?.note ||
-      (fulfillment?.pickup_details && fulfillment.pickup_details.note) ||
+      (notesFromSquare.length ? notesFromSquare.join("\n") : null) ||
       existing.notes ||
       null;
     const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
