@@ -270,8 +270,9 @@
 
     .bubble-top-left {
         display: flex;
-        flex-direction: column;
-        gap: 0.2rem;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
     }
 
     .order-number-tag {
@@ -282,6 +283,16 @@
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.04em;
+        padding: 0.2rem 0.55rem;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.18);
+    }
+
+    .order-header-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
     }
 
     .dining-chip, .status-chip {
@@ -495,6 +506,8 @@
       font-size: 1.05rem;
       color: var(--text);
       line-height: 1.4;
+      width: 100%;
+      white-space: pre-wrap;
     }
     .items-more {
       margin-top: 0.35rem;
@@ -558,13 +571,6 @@
     .priority-section.disabled {
         cursor: default;
     }
-    .order-meta-row {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-    }
-
     .order-count-meta {
         font-size: 0.9rem;
         color: var(--muted);
@@ -1425,8 +1431,8 @@
           b.innerHTML = `
             <div class="bubble-top-bar ${displayStatus !== 'ready' ? displayStatus : ''}">
               <div class="bubble-top-left">
-                <div class="order-number-tag">${escapeHtml(o.orderNumber)}</div>
-                <div class="order-meta-row">
+                <div class="order-header-row">
+                  <div class="order-number-tag">${escapeHtml(o.orderNumber)}</div>
                   ${diningOption ? `<span class="dining-chip">${diningOption}</span>` : ``}
                   <span class="status-chip">${statusText}</span>
                 </div>
