@@ -37,6 +37,7 @@
     body {
       margin: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 18px;
       background: var(--page-bg);
       color: var(--text);
       height: 100vh;
@@ -84,7 +85,7 @@
       min-width: 0;
     }
     header h1 {
-      font-size: 1.2rem;
+      font-size: 1.35rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       margin: 0;
@@ -93,7 +94,7 @@
       white-space: nowrap;
     }
     header .subtitle {
-      font-size: 0.95rem; 
+      font-size: 1.05rem;
       color: transparent; /* Text removed as requested */
       white-space: nowrap;
       overflow: hidden;
@@ -110,7 +111,7 @@
     header .tab-pill {
       padding: 0.3rem 0.8rem;
       border-radius: 999px;
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       font-weight: 700;
       cursor: pointer;
       background: rgba(15, 23, 42, 0.9);
@@ -240,6 +241,7 @@
       flex-direction: column;
       background: var(--card-bg);
       color: var(--text);
+      text-align: left;
     }
     .bubble:active {
       cursor: grabbing;
@@ -262,7 +264,8 @@
         gap: 0.75rem;
         align-items: center;
         font-weight: 700;
-        font-size: 0.9rem;
+        font-size: 1.05rem;
+        text-align: left;
     }
 
     .bubble-top-left {
@@ -275,7 +278,7 @@
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        font-size: 0.95rem;
+        font-size: 1.1rem;
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -288,7 +291,7 @@
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.2);
         color: #fff;
-        font-size: 0.82rem;
+        font-size: 0.95rem;
         letter-spacing: 0.03em;
     }
 
@@ -311,6 +314,7 @@
         display: flex;
         flex-direction: column;
         gap: 0.65rem;
+        text-align: left;
     }
     
     .recall-btn {
@@ -320,7 +324,7 @@
         padding: 0.35rem 0.75rem;
         border-radius: 6px;
         font-weight: 700;
-        font-size: 0.95rem;
+        font-size: 1.05rem;
         cursor: pointer;
         transition: background 0.2s;
         flex: 0 0 auto;
@@ -361,13 +365,13 @@
       flex: 0 0 auto;
     }
     .bubble-timer {
-      font-size: 1.05rem;
+      font-size: 1.15rem;
       font-weight: 800;
       color: var(--time-default); /* New dark color for timer text */
       line-height: 1.05;
     }
     .bubble-meta {
-      font-size: 0.9rem;
+      font-size: 1rem;
       color: var(--muted);
       font-weight: 650;
       letter-spacing: 0.01em;
@@ -416,7 +420,7 @@
       min-width: 0;
     }
     .item-name {
-      font-size: 1.25rem;
+      font-size: 1.35rem;
       font-weight: 850;
       color: var(--text);
       overflow: hidden;
@@ -426,7 +430,7 @@
       transition: color 0.2s;
     }
     .item-variant {
-      font-size: 0.9rem;
+      font-size: 1rem;
       color: var(--muted);
       font-weight: 700;
       overflow: hidden;
@@ -437,7 +441,7 @@
         color: var(--muted);
     }
     .item-qty {
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       font-weight: 800;
       padding: 0.12rem 0.45rem;
       border-radius: 999px;
@@ -466,7 +470,7 @@
 
     .item-mods {
       margin-top: 0.15rem;
-      font-size: 0.98rem;
+      font-size: 1.05rem;
       color: var(--ready); /* Green for Modifiers */
       font-style: italic;
       line-height: 1.2;
@@ -475,7 +479,7 @@
     }
     .item-note {
       margin-top: 0.15rem;
-      font-size: 0.95rem;
+      font-size: 1.02rem;
       color: var(--muted);
       font-style: italic;
       line-height: 1.2;
@@ -488,13 +492,13 @@
       border-radius: 10px;
       background: rgba(15, 23, 42, 0.04);
       border: 1px dashed rgba(148, 163, 184, 0.4);
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       color: var(--text);
       line-height: 1.4;
     }
     .items-more {
       margin-top: 0.35rem;
-      font-size: 1.0rem;
+      font-size: 1.05rem;
       color: var(--muted);
       font-weight: 650;
     }
@@ -506,7 +510,7 @@
         background: transparent;
         border: none;
         color: #fbbf24;
-        font-size: 1.85rem;
+        font-size: 1.6rem;
         cursor: pointer;
         transition: color 0.2s ease, transform 0.2s ease;
         padding: 0.2rem 0.4rem;
@@ -534,8 +538,8 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.35rem;
-        padding: 0.85rem 0.85rem 1rem;
+        gap: 0.25rem;
+        padding: 0.45rem 0.75rem 0.55rem;
         border-top: 1px solid rgba(148, 163, 184, 0.35);
         background: rgba(15, 23, 42, 0.03);
         border-radius: 0 0 var(--radius) var(--radius);
