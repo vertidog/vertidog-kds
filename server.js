@@ -8,9 +8,7 @@ const { WebSocketServer } = require("ws");
 const bodyParser = require("body-parser");
 const path = require("path");
 const fs = require('fs'); // ADDED: File System module for persistence
-
-// NOTE: crypto module needed for signature verification (postponed)
-// const crypto = require("crypto"); 
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -23,6 +21,9 @@ const SQUARE_BASE_URL =
   SQUARE_ENV === "sandbox"
     ? "https://connect.squareupsandbox.com"
     : "https://connect.squareup.com";
+const SQUARE_WEBHOOK_SIGNATURE_KEY = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
+const SQUARE_WEBHOOK_NOTIFICATION_URL =
+  process.env.SQUARE_WEBHOOK_NOTIFICATION_URL;
 
 // In-memory store keyed by orderId
 const orders = {};
@@ -324,7 +325,13 @@ wss.on("connection", (ws) => {
 
 // ---------------- Middleware + static ----------------
 
-app.use(bodyParser.json());
+app.use(
+  bodyParser.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 // Ensure your 'kitchen.html' is in a 'public' folder relative to this server.js
 app.use(express.static(path.join(__dirname, "public"))); 
 
@@ -338,175 +345,270 @@ app.get("/healthz", (req, res) => res.status(200).send("OK"));
 
 // ---------------- Square Webhook ----------------
 
-app.post("/square/webhook", async (req, res) => {
-  try {
-    const body = req.body || {};
-    console.log("🔔 Square Webhook Received:", JSON.stringify(body));
-
-    const eventType = body.type;
-    console.log("Square Event:", eventType);
-
-    const dataObj = body.data || {};
-    const objectWrapper = dataObj.object || {};
-
-    let eventWrapper =
-      objectWrapper.order ||
-      objectWrapper.order_created ||
-      objectWrapper.order_updated ||
-      null;
-
-    if (!eventWrapper) {
-      console.log(
-        "❌ No order wrapper (order / order_created / order_updated)."
-      );
-      return res.status(200).send("ok");
-    }
-
-    let fullOrder = eventWrapper.order || null;
-
-    const orderId = (fullOrder && fullOrder.id) || eventWrapper.order_id;
-    const state = (fullOrder && fullOrder.state) || eventWrapper.state;
-
-    if (!orderId) {
-      console.log("❌ No order_id present in event.");
-      return res.status(200).send("ok");
-    }
-
-    // If we don't have items yet, try Orders API
-    if (!fullOrder || !Array.isArray(fullOrder.line_items)) {
-      const fetched = await fetchOrderFromSquare(orderId);
-      if (fetched) {
-        fullOrder = fetched;
-      }
-    }
-
-    // ---------- ORDER NUMBER (Pulls Square's Display ID) ----------
-    let orderNumber = null;
-    if (fullOrder) {
-      // Prioritize Square's display fields (ticket_name, display_id, etc.)
-      orderNumber =
-        fullOrder.ticket_name ||
-        fullOrder.order_number ||
-        fullOrder.display_id || // <--- This is the key display number
-        fullOrder.receipt_number ||
-        (fullOrder.id ? fullOrder.id.slice(-6).toUpperCase() : null);
-    } else {
-      orderNumber = orderId.slice(-6).toUpperCase();
-    }
-    // ---------- END ORDER NUMBER ASSIGNMENT ----------
-
-    // ---------- ITEMS ----------
-    let items = [];
-    if (fullOrder && Array.isArray(fullOrder.line_items)) {
-      items = fullOrder.line_items.map((li) => ({
-        name: li.name || "Item",
-        quantity: toNumberQuantity(li.quantity || 1),
-        variationName: li.variation_name || null,
-        modifiers: Array.isArray(li.modifiers)
-          ? li.modifiers.map((m) => m.name).filter(Boolean)
-          : [],
-      }));
-    } else if (orders[orderId]?.items) {
-      // reuse items from previous event for same order
-      items = orders[orderId].items;
-    }
-    
-    // Get existing state for merge
-    const existing = orders[orderId] || {};
-    if (existing.status) existing.status = normalizeStatus(existing.status);
-
-    // --- ITEM COMPLETION & PRIORITY PERSISTENCE ---
-    // 1. Map new items to existing completion status if available
-    let finalItems = items.map((newItem, index) => {
-        let completed = false;
-        if (existing.items && existing.items[index]) {
-            completed = existing.items[index].completed ?? false;
-        }
-        return {
-            ...newItem,
-            completed: completed
-        };
-    });
-    
-    // 2. Preserve priority status
-    const isPrioritized = existing.isPrioritized ?? false;
-    
-    // 3. Recalculate item count based on final items
-    const itemCount = finalItems.reduce(
-      (sum, it) => sum + toNumberQuantity(it.quantity),
-      0
+function verifySquareSignature(req) {
+  if (!SQUARE_WEBHOOK_SIGNATURE_KEY || !SQUARE_WEBHOOK_NOTIFICATION_URL) {
+    console.error(
+      "❌ Missing SQUARE_WEBHOOK_SIGNATURE_KEY or SQUARE_WEBHOOK_NOTIFICATION_URL; cannot verify webhook."
     );
-
-    const fulfillment = Array.isArray(fullOrder?.fulfillments) ? fullOrder.fulfillments[0] : null;
-    const diningOption =
-      (fullOrder?.dining_option && fullOrder.dining_option.name) ||
-      (fulfillment?.type || null) ||
-      existing.diningOption ||
-      null;
-
-    const notesFromSquare = [
-      fullOrder?.note,
-      fullOrder?.buyer_supplied_note,
-      fulfillment?.pickup_details?.note,
-      fulfillment?.pickup_details?.customer_note,
-      fulfillment?.delivery_details?.note,
-      fulfillment?.delivery_details?.instructions,
-    ]
-      .filter((val) => typeof val === "string" && val.trim().length > 0)
-      .map((val) => val.trim());
-
-    const notes =
-      (notesFromSquare.length ? notesFromSquare.join("\n") : null) ||
-      existing.notes ||
-      null;
-    const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
-    const eventTypeLower = typeof eventType === "string" ? eventType.toLowerCase() : "";
-
-    // --- ULTIMATE KDS STATUS LOCK FIX ---
-    let kdsStatus = normalizeStatus(existing.status) || "new";
-    
-    // Rule 1: Cancellation is the only update that can override any KDS status.
-    if (stateFromSquare === "canceled" || stateFromSquare === "cancelled" || stateFromSquare === "closed" || eventTypeLower.includes("cancel")) {
-        kdsStatus = "done";
-    }
-
-    // Rule 2 (THE CRITICAL PART): If the order already exists in our KDS memory
-    // AND it has been touched (i.e., status is NOT 'new'), we NEVER override
-    // the existing KDS status with a general Square update (like 'OPEN').
-    if (existing.status && existing.status !== 'new' && kdsStatus !== 'done') {
-        kdsStatus = normalizeStatus(existing.status);
-    }
-    // --- END ULTIMATE KDS STATUS LOCK FIX ---
-
-    const merged = {
-      orderId,
-      orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6), // Final selection, preferring Square's
-      status: normalizeStatus(kdsStatus), // Use the determined status
-      createdAt: existing.createdAt || Date.now(),
-      itemCount,
-      items: finalItems,
-      isPrioritized, // Include priority
-      stateFromSquare,
-      diningOption,
-      notes,
-    };
-
-    orders[orderId] = merged;
-    saveKDSState(); // Save state after Square webhook update
-
-    console.log("✅ Final KDS order object:", merged);
-
-    broadcast({
-      type: "NEW_ORDER",
-      ...merged,
-    });
-
-    return res.status(200).send("ok");
-  } catch (err) {
-    console.error("Webhook Error:", err);
-    // 200 so Square doesn’t spam retries while we debug
-    return res.status(200).send("error");
+    return false;
   }
+
+  const rawBody = req.rawBody;
+  const bodyString = rawBody ? rawBody.toString("utf8") : JSON.stringify(req.body || {});
+  const signatureHeader = req.get("x-square-signature");
+  const hmacSignatureHeader = req.get("x-square-hmacsha256-signature");
+
+  if (!signatureHeader && !hmacSignatureHeader) {
+    console.warn("⚠️ Missing Square webhook signature header; rejecting request.");
+    return false;
+  }
+
+  const payload = `${SQUARE_WEBHOOK_NOTIFICATION_URL}${bodyString}`;
+
+  const safeCompare = (a, b) => {
+    const bufA = Buffer.from(a || "");
+    const bufB = Buffer.from(b || "");
+    return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+  };
+
+  const expectedSha1 = crypto
+    .createHmac("sha1", SQUARE_WEBHOOK_SIGNATURE_KEY)
+    .update(payload)
+    .digest("base64");
+  const expectedSha256 = crypto
+    .createHmac("sha256", SQUARE_WEBHOOK_SIGNATURE_KEY)
+    .update(payload)
+    .digest("base64");
+
+  const validSha1 = signatureHeader && safeCompare(signatureHeader, expectedSha1);
+  const validSha256 =
+    hmacSignatureHeader && safeCompare(hmacSignatureHeader, expectedSha256);
+
+  return Boolean(validSha1 || validSha256);
+}
+
+app.post("/square/webhook", (req, res) => {
+  if (!verifySquareSignature(req)) {
+    return res.status(401).send("invalid signature");
+  }
+
+  res.status(200).send("ok"); // Respond immediately to avoid webhook retries on slow calls
+
+  const body = req.body || {};
+
+  (async () => {
+    try {
+      console.log("🔔 Square Webhook Received:", JSON.stringify(body));
+
+      const eventType = body.type;
+      console.log("Square Event:", eventType);
+
+      const eventTypeLower =
+        typeof eventType === "string" ? eventType.toLowerCase() : "";
+      const dataObj = body.data || {};
+      const objectWrapper = dataObj.object || {};
+
+      let fullOrder = null;
+      let orderId = null;
+      let state = null;
+
+      if (eventTypeLower.startsWith("payment.")) {
+        const payment = objectWrapper.payment || {};
+        orderId = payment.order_id;
+        const paymentStatus = payment.status || null;
+
+        if (!orderId) {
+          console.log("ℹ️ Payment webhook without order_id; ignoring.");
+          return;
+        }
+
+        try {
+          fullOrder = await fetchOrderFromSquare(orderId);
+          state = fullOrder?.state || null;
+        } catch (err) {
+          console.error("Error fetching order for payment webhook:", err);
+          return;
+        }
+
+        if (!fullOrder) {
+          console.log("ℹ️ No order data returned for payment webhook; skipping.");
+          return;
+        }
+
+        // Deduplicate repeated payment events with the same status to reduce noise
+        const existingOrder = orders[orderId];
+        if (
+          existingOrder &&
+          paymentStatus &&
+          existingOrder.lastPaymentStatus === paymentStatus
+        ) {
+          console.log(
+            `ℹ️ Duplicate payment webhook for ${orderId} with status ${paymentStatus}; ignoring.`
+          );
+          return;
+        }
+      } else {
+        let eventWrapper =
+          objectWrapper.order ||
+          objectWrapper.order_created ||
+          objectWrapper.order_updated ||
+          null;
+
+        if (!eventWrapper) {
+          console.log(
+            "❌ No order wrapper (order / order_created / order_updated)."
+          );
+          return;
+        }
+
+        fullOrder = eventWrapper.order || null;
+
+        orderId = (fullOrder && fullOrder.id) || eventWrapper.order_id;
+        state = (fullOrder && fullOrder.state) || eventWrapper.state;
+
+        if (!orderId) {
+          console.log("❌ No order_id present in event.");
+          return;
+        }
+
+        // If we don't have items yet, try Orders API
+        if (!fullOrder || !Array.isArray(fullOrder.line_items)) {
+          const fetched = await fetchOrderFromSquare(orderId);
+          if (fetched) {
+            fullOrder = fetched;
+          }
+        }
+      }
+
+      // ---------- ORDER NUMBER (Pulls Square's Display ID) ----------
+      let orderNumber = null;
+      if (fullOrder) {
+        // Prioritize Square's display fields (ticket_name, display_id, etc.)
+        orderNumber =
+          fullOrder.ticket_name ||
+          fullOrder.order_number ||
+          fullOrder.display_id || // <--- This is the key display number
+          fullOrder.receipt_number ||
+          (fullOrder.id ? fullOrder.id.slice(-6).toUpperCase() : null);
+      } else if (orderId) {
+        orderNumber = orderId.slice(-6).toUpperCase();
+      }
+      // ---------- END ORDER NUMBER ASSIGNMENT ----------
+
+      // ---------- ITEMS ----------
+      let items = [];
+      if (fullOrder && Array.isArray(fullOrder.line_items)) {
+        items = fullOrder.line_items.map((li) => ({
+          name: li.name || "Item",
+          quantity: toNumberQuantity(li.quantity || 1),
+          variationName: li.variation_name || null,
+          modifiers: Array.isArray(li.modifiers)
+            ? li.modifiers.map((m) => m.name).filter(Boolean)
+            : [],
+        }));
+      } else if (orderId && orders[orderId]?.items) {
+        // reuse items from previous event for same order
+        items = orders[orderId].items;
+      }
+
+      if (!orderId) return;
+
+      // Get existing state for merge
+      const existing = orders[orderId] || {};
+      if (existing.status) existing.status = normalizeStatus(existing.status);
+
+      // --- ITEM COMPLETION & PRIORITY PERSISTENCE ---
+      // 1. Map new items to existing completion status if available
+      let finalItems = items.map((newItem, index) => {
+          let completed = false;
+          if (existing.items && existing.items[index]) {
+              completed = existing.items[index].completed ?? false;
+          }
+          return {
+              ...newItem,
+              completed: completed
+          };
+      });
+
+      // 2. Preserve priority status
+      const isPrioritized = existing.isPrioritized ?? false;
+
+      // 3. Recalculate item count based on final items
+      const itemCount = finalItems.reduce(
+        (sum, it) => sum + toNumberQuantity(it.quantity),
+        0
+      );
+
+      const fulfillment = Array.isArray(fullOrder?.fulfillments) ? fullOrder.fulfillments[0] : null;
+      const diningOption =
+        (fullOrder?.dining_option && fullOrder.dining_option.name) ||
+        (fulfillment?.type || null) ||
+        existing.diningOption ||
+        null;
+
+      const notesFromSquare = [
+        fullOrder?.note,
+        fullOrder?.buyer_supplied_note,
+        fulfillment?.pickup_details?.note,
+        fulfillment?.pickup_details?.customer_note,
+        fulfillment?.delivery_details?.note,
+        fulfillment?.delivery_details?.instructions,
+      ]
+        .filter((val) => typeof val === "string" && val.trim().length > 0)
+        .map((val) => val.trim());
+
+      const notes =
+        (notesFromSquare.length ? notesFromSquare.join("\n") : null) ||
+        existing.notes ||
+        null;
+      const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
+
+      // --- ULTIMATE KDS STATUS LOCK FIX ---
+      let kdsStatus = normalizeStatus(existing.status) || "new";
+
+      // Rule 1: Cancellation is the only update that can override any KDS status.
+      if (stateFromSquare === "canceled" || stateFromSquare === "cancelled" || stateFromSquare === "closed" || eventTypeLower.includes("cancel")) {
+          kdsStatus = "done";
+      }
+
+      // Rule 2 (THE CRITICAL PART): If the order already exists in our KDS memory
+      // AND it has been touched (i.e., status is NOT 'new'), we NEVER override
+      // the existing KDS status with a general Square update (like 'OPEN').
+      if (existing.status && existing.status !== 'new' && kdsStatus !== 'done') {
+          kdsStatus = normalizeStatus(existing.status);
+      }
+      // --- END ULTIMATE KDS STATUS LOCK FIX ---
+
+      const merged = {
+        orderId,
+        orderNumber: orderNumber || existing.orderNumber || orderId.slice(-6), // Final selection, preferring Square's
+        status: normalizeStatus(kdsStatus), // Use the determined status
+        createdAt: existing.createdAt || Date.now(),
+        itemCount,
+        items: finalItems,
+        isPrioritized, // Include priority
+        stateFromSquare,
+        diningOption,
+        notes,
+        lastPaymentStatus:
+          eventTypeLower.startsWith("payment.") && objectWrapper.payment
+            ? objectWrapper.payment.status || null
+            : existing.lastPaymentStatus || null,
+      };
+
+      orders[orderId] = merged;
+      saveKDSState(); // Save state after Square webhook update
+
+      console.log("✅ Final KDS order object:", merged);
+
+      broadcast({
+        type: "NEW_ORDER",
+        ...merged,
+      });
+    } catch (err) {
+      console.error("Webhook Error:", err);
+    }
+  })();
 });
 
 // ---------------- Test endpoint ----------------
