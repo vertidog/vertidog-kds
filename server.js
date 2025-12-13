@@ -349,26 +349,38 @@ app.post("/square/webhook", async (req, res) => {
     const dataObj = body.data || {};
     const objectWrapper = dataObj.object || {};
 
-    let eventWrapper =
+    const eventWrapper =
       objectWrapper.order ||
       objectWrapper.order_created ||
       objectWrapper.order_updated ||
       null;
 
-    if (!eventWrapper) {
+    const paymentWrapper =
+      objectWrapper.payment ||
+      objectWrapper.payment_created ||
+      objectWrapper.payment_updated ||
+      null;
+
+    if (!eventWrapper && !paymentWrapper) {
       console.log(
-        "❌ No order wrapper (order / order_created / order_updated)."
+        "❌ No order/payment wrapper (order / order_created / order_updated / payment / payment_created / payment_updated)."
       );
       return res.status(200).send("ok");
     }
 
-    let fullOrder = eventWrapper.order || null;
+    let fullOrder = eventWrapper?.order || null;
 
-    const orderId = (fullOrder && fullOrder.id) || eventWrapper.order_id;
-    const state = (fullOrder && fullOrder.state) || eventWrapper.state;
+    const orderId =
+      (fullOrder && fullOrder.id) ||
+      eventWrapper?.order_id ||
+      paymentWrapper?.order_id;
+    const state =
+      (fullOrder && fullOrder.state) ||
+      eventWrapper?.state ||
+      paymentWrapper?.status;
 
     if (!orderId) {
-      console.log("❌ No order_id present in event.");
+      console.log("❌ No order_id present in event/payment.");
       return res.status(200).send("ok");
     }
 
@@ -441,6 +453,7 @@ app.post("/square/webhook", async (req, res) => {
     const diningOption =
       (fullOrder?.dining_option && fullOrder.dining_option.name) ||
       (fulfillment?.type || null) ||
+      (paymentWrapper?.dining_option && paymentWrapper.dining_option.name) ||
       existing.diningOption ||
       null;
 
@@ -451,6 +464,7 @@ app.post("/square/webhook", async (req, res) => {
       fulfillment?.pickup_details?.customer_note,
       fulfillment?.delivery_details?.note,
       fulfillment?.delivery_details?.instructions,
+      paymentWrapper?.note,
     ]
       .filter((val) => typeof val === "string" && val.trim().length > 0)
       .map((val) => val.trim());
