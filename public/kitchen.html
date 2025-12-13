@@ -473,6 +473,15 @@
       padding-left: 0.85rem;
       border-left: 3px solid rgba(34, 197, 94, 0.45);
     }
+    .item-note {
+      margin-top: 0.15rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+      font-style: italic;
+      line-height: 1.2;
+      padding-left: 0.85rem;
+      border-left: 3px solid rgba(148, 163, 184, 0.45);
+    }
     .bubble-notes {
       margin-top: 0.4rem;
       padding: 0.65rem 0.75rem;
@@ -1259,6 +1268,8 @@
         const modsMore = mods.length > 3 ? `, +${mods.length - 3} more` : "";
         const isCompleted = item.completed || false;
         const completionClass = isCompleted ? 'completed' : '';
+        const note = (item?.note || "").trim();
+        const noteHtml = note ? `<div class="item-note">${escapeHtml(note)}</div>` : ``;
 
         return `
           <div data-item-index="${index}" onclick="window.toggleItemCompletion('${orderNumber}', ${index}, event)">
@@ -1273,6 +1284,7 @@
               <div class="item-qty">x${Number.isFinite(qty) ? qty : 1}</div>
             </div>
             ${mods.length ? `<div class="item-mods">| + ${modsShown}${modsMore}</div>` : ``}
+            ${noteHtml}
           </div>
         `;
       }).join("");
@@ -1396,7 +1408,8 @@
           const timerHtml = `${formatTimeElapsed(o.createdAt)}`;
 
           const diningOption = escapeHtml(o.diningOption || "");
-          const notes = o.notes ? renderMultilineText(o.notes) : "";
+          const rawNotes = typeof o.notes === "string" ? o.notes.trim() : "";
+          const notes = rawNotes ? renderMultilineText(rawNotes) : "";
           
           const itemsHtml = renderItemsHtml(o.orderNumber, o.items, 99);
           

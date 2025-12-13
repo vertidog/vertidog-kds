@@ -402,6 +402,7 @@ app.post("/square/webhook", async (req, res) => {
         name: li.name || "Item",
         quantity: toNumberQuantity(li.quantity || 1),
         variationName: li.variation_name || null,
+        note: li.note || "",
         modifiers: Array.isArray(li.modifiers)
           ? li.modifiers.map((m) => m.name).filter(Boolean)
           : [],
@@ -444,21 +445,7 @@ app.post("/square/webhook", async (req, res) => {
       existing.diningOption ||
       null;
 
-    const notesFromSquare = [
-      fullOrder?.note,
-      fullOrder?.buyer_supplied_note,
-      fulfillment?.pickup_details?.note,
-      fulfillment?.pickup_details?.customer_note,
-      fulfillment?.delivery_details?.note,
-      fulfillment?.delivery_details?.instructions,
-    ]
-      .filter((val) => typeof val === "string" && val.trim().length > 0)
-      .map((val) => val.trim());
-
-    const notes =
-      (notesFromSquare.length ? notesFromSquare.join("\n") : null) ||
-      existing.notes ||
-      null;
+    const notes = typeof fullOrder?.note === "string" ? fullOrder.note : "";
     const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
     const eventTypeLower = typeof eventType === "string" ? eventType.toLowerCase() : "";
 
