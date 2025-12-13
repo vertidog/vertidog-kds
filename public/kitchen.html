@@ -1427,12 +1427,12 @@
               <div class="bubble-top-left">
                 <div class="order-number-tag">${escapeHtml(o.orderNumber)}</div>
                 <div class="order-meta-row">
-                  ${diningOption ? `<span class=\\"dining-chip\\">${diningOption}</span>` : ``}
+                  ${diningOption ? `<span class="dining-chip">${diningOption}</span>` : ``}
                   <span class="status-chip">${statusText}</span>
                 </div>
               </div>
               <div class="bubble-top-right">
-                ${timerHtml ? `<span class=\\"bubble-timer\\">${timerHtml}</span>` : ``}
+                ${timerHtml ? `<span class="bubble-timer">${timerHtml}</span>` : ``}
               </div>
             </div>
 
@@ -1449,7 +1449,7 @@
                 <div class="bubble-items">
                   ${itemsHtml}
                 </div>
-                ${notes ? `<div class=\\"bubble-notes\\">${notes}</div>` : ``}
+                ${notes ? `<div class="bubble-notes">${notes}</div>` : ``}
             </div>
             ${prioritySectionHtml}
           `;
