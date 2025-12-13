@@ -1264,8 +1264,13 @@
         const qty = Number(item?.quantity ?? 1);
         const variant = escapeHtml(item?.variationName || "");
         const mods = Array.isArray(item?.modifiers) ? item.modifiers.filter(Boolean) : [];
-        const modsShown = mods.slice(0, 3).map(escapeHtml).join(", ");
-        const modsMore = mods.length > 3 ? `, +${mods.length - 3} more` : "";
+        const cleanedMods = mods
+          .map((mod) => String(mod ?? ""))
+          .map((mod) => mod.replace(/^[\s\/\+\-]+/, "").trim())
+          .filter(Boolean);
+        const modsLine = cleanedMods.length
+          ? `<div class="item-mods">${cleanedMods.map(escapeHtml).join(", ")}</div>`
+          : "";
         const isCompleted = item.completed || false;
         const completionClass = isCompleted ? 'completed' : '';
         const note = (item?.note || "").trim();
@@ -1283,7 +1288,7 @@
               </div>
               <div class="item-qty">x${Number.isFinite(qty) ? qty : 1}</div>
             </div>
-            ${mods.length ? `<div class="item-mods">| + ${modsShown}${modsMore}</div>` : ``}
+            ${modsLine}
             ${noteHtml}
           </div>
         `;
