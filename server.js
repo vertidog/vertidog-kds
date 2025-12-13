@@ -445,28 +445,7 @@ app.post("/square/webhook", async (req, res) => {
       existing.diningOption ||
       null;
 
-    const lineItemNotes = Array.isArray(fullOrder?.line_items)
-      ? fullOrder.line_items
-          .filter((li) => typeof li.note === "string" && li.note.trim().length > 0)
-          .map((li) => `${li.name || "Item"}: ${li.note.trim()}`)
-      : [];
-
-    const notesFromSquare = [
-      fullOrder?.note,
-      fullOrder?.buyer_supplied_note,
-      fulfillment?.pickup_details?.note,
-      fulfillment?.pickup_details?.customer_note,
-      fulfillment?.delivery_details?.note,
-      fulfillment?.delivery_details?.instructions,
-      ...lineItemNotes,
-    ]
-      .filter((val) => typeof val === "string" && val.trim().length > 0)
-      .map((val) => val.trim());
-
-    const notes =
-      (notesFromSquare.length ? notesFromSquare.join("\n") : null) ||
-      existing.notes ||
-      null;
+    const notes = typeof fullOrder?.note === "string" ? fullOrder.note : "";
     const stateFromSquare = typeof state === "string" ? state.toLowerCase() : "";
     const eventTypeLower = typeof eventType === "string" ? eventType.toLowerCase() : "";
 

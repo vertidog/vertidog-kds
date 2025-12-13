@@ -1408,7 +1408,8 @@
           const timerHtml = `${formatTimeElapsed(o.createdAt)}`;
 
           const diningOption = escapeHtml(o.diningOption || "");
-          const notes = o.notes ? renderMultilineText(o.notes) : "";
+          const rawNotes = typeof o.notes === "string" ? o.notes.trim() : "";
+          const notes = rawNotes ? renderMultilineText(rawNotes) : "";
           
           const itemsHtml = renderItemsHtml(o.orderNumber, o.items, 99);
           
