@@ -208,6 +208,8 @@
     .bubble {
       position: relative;
       flex: 0 0 var(--card-width);
+      width: var(--card-width);
+      min-width: var(--card-width);
       height: auto;
       min-height: 0;
       max-height: var(--card-max-height);
@@ -600,13 +602,18 @@
       background: #f0fdf4; /* Very light green background */
       border-color: var(--ready);
       box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0, 0, 0, 0.45);
+      transition: none;
+      transform: none;
     }
     .bubble.ready .bubble-top-bar { background: var(--ready); color: #fff; }
-    
+
     .bubble.done {
       background: #e5e7eb; /* Light grey for completed */
       border-color: #94a3b8;
-      opacity: 0.9;
+      opacity: 1;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+      transition: none;
+      transform: none;
     }
     .bubble.done .bubble-top-bar {
       background: #94a3b8;
