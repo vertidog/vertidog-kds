@@ -9,6 +9,7 @@
       /* White/Light Ticket Theme */
       --bg: #050816;
       --card-bg: #fff; /* WHITE TICKETS */
+      --card-text: #1f2937;
       --new: #3b82f6;
       --progress: #f97316;
       --ready: #22c55e;
@@ -50,7 +51,9 @@
       --header-bg: rgba(255, 255, 255, 0.9);
       --header-border: rgba(148, 163, 184, 0.35);
       --header-text: #0f172a;
-      --muted: #475569;
+      --muted: #cbd5e1;
+      --card-bg: #000;
+      --card-text: #e2e8f0;
     }
 
     /* HEADER - Fixed to top, background remains dark */
@@ -65,8 +68,7 @@
       z-index: 10;
       gap: 1rem;
       user-select: none;
-      
-      position: fixed; 
+      position: fixed;
       top: 0; 
       left: 0; 
       width: 100%;
@@ -171,6 +173,16 @@
       transition: all 0.4s;
     }
 
+    .header-clock {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      font-variant-numeric: tabular-nums;
+      pointer-events: none;
+    }
+
     /* -----------------------------
       MAIN SCROLLER & CARD LAYOUT
     --------------------------------*/
@@ -240,7 +252,7 @@
       display: flex;
       flex-direction: column;
       background: var(--card-bg);
-      color: var(--text);
+      color: var(--card-text);
       text-align: left;
     }
     .bubble:active {
@@ -316,7 +328,6 @@
     /* Time Coloring */
     .bubble-top-bar.alert { background: var(--time-alert); }
     .bubble-top-bar.critical { background: var(--time-critical); }
-
 
     .bubble-body {
         flex: 1;
@@ -433,7 +444,7 @@
     .item-name {
       font-size: 1.35rem;
       font-weight: 850;
-      color: var(--text);
+      color: var(--card-text);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -504,7 +515,7 @@
       background: rgba(15, 23, 42, 0.04);
       border: 1px dashed rgba(148, 163, 184, 0.4);
       font-size: 1.05rem;
-      color: var(--text);
+      color: var(--card-text);
       line-height: 1.4;
       width: 100%;
       white-space: pre-wrap;
@@ -592,7 +603,7 @@
       border-color: var(--ready);
       box-shadow: 0 0 16px rgba(34, 197, 94, 0.75), 0 6px 16px rgba(0, 0, 0, 0.45);
     }
-    .bubble.ready .bubble-top-bar { background: var(--ready); color: var(--card-bg); }
+    .bubble.ready .bubble-top-bar { background: var(--ready); color: #fff; }
     
     .bubble.done {
       background: #e5e7eb; /* Light grey for completed */
@@ -626,6 +637,7 @@
       <div class="tab-pill active-tab" data-filter="active" onclick="setFilter('active')">ACTIVE (<span id="active-count">0</span>)</div>
       <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
     </div>
+    <div id="header-clock" class="header-clock" aria-label="Current time"></div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
         <button class="icon-button" id="mute-toggle" aria-label="Toggle TTS mute" title="Mute TTS">
           🔊
@@ -657,6 +669,7 @@
     const muteToggle = document.getElementById("mute-toggle");
     const themeToggle = document.getElementById("theme-toggle");
     const readySound = document.getElementById("ready-sound");
+    const headerClock = document.getElementById("header-clock");
     
     const activeCountEl = document.getElementById("active-count");
     const doneCountEl = document.getElementById("done-count");
@@ -674,8 +687,15 @@
     let announcementQueue = [];
     let isAnnouncing = false;
     let ttsMuted = false;
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    let themePreference = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
+    function getTimeBasedTheme() {
+      const hour = new Date().getHours();
+      return hour >= 6 && hour < 19 ? 'light' : 'dark';
+    }
+
+    const storedTheme = localStorage.getItem('theme');
+    let themePreference = storedTheme === 'light' || storedTheme === 'dark'
+      ? storedTheme
+      : getTimeBasedTheme();
 
     const storedMutePreference = localStorage.getItem('ttsMuted');
     if (storedMutePreference !== null) {
@@ -775,6 +795,23 @@
     updateThemeButton(themePreference);
     applyTheme(themePreference);
     themeToggle.addEventListener('click', toggleTheme);
+
+    /* -----------------------------
+      HEADER CLOCK
+    --------------------------------*/
+
+    function updateClockDisplay() {
+      if (!headerClock) return;
+      const now = new Date();
+      headerClock.textContent = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    }
+
+    updateClockDisplay();
+    setInterval(updateClockDisplay, 1000);
 
     /* -----------------------------
       TTS SETUP
