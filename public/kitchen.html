@@ -293,39 +293,51 @@
     .bubble-top-left {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        flex-wrap: wrap;
+        gap: 0.35rem;
+        flex-wrap: nowrap;
+        min-width: 0;
     }
 
     .order-number-tag {
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        padding: 0.2rem 0.55rem;
+        padding: 0.16rem 0.5rem;
         border-radius: 12px;
         background: rgba(255, 255, 255, 0.18);
+        flex-shrink: 0;
     }
 
     .order-header-row {
         display: inline-flex;
         align-items: center;
-        gap: 0.35rem;
-        flex-wrap: wrap;
+        gap: 0.25rem;
+        flex-wrap: nowrap;
+        min-width: 0;
     }
 
     .dining-chip, .status-chip {
         display: inline-flex;
         align-items: center;
-        padding: 0.18rem 0.55rem;
+        padding: 0.14rem 0.45rem;
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.2);
         color: #fff;
-        font-size: 0.95rem;
+        font-size: 0.85rem;
         letter-spacing: 0.03em;
+        line-height: 1.1;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .dining-chip {
+        max-width: 10rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .bubble-top-right {
