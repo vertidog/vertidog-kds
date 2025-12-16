@@ -518,7 +518,7 @@
       border-top: 1px dashed rgba(148, 163, 184, 0.45);
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
+      gap: 0.55rem;
     }
     .bubble-notes {
       margin: 0;
@@ -531,6 +531,57 @@
       line-height: 1.4;
       width: 100%;
       white-space: pre-wrap;
+    }
+    .bubble-footer-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.8rem;
+    }
+    .footer-left,
+    .footer-right {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .footer-left {
+        justify-content: flex-start;
+    }
+    .footer-left.disabled {
+        opacity: 0.35;
+    }
+    .footer-left.disabled .priority-star-btn {
+        pointer-events: none;
+    }
+    .finish-flag-btn {
+        background: #0f172a;
+        color: #fff;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        border-radius: 999px;
+        padding: 0.42rem 0.9rem;
+        font-size: 1.1rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+        transition: transform 0.18s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        min-width: 118px;
+    }
+    .finish-flag-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    }
+    .finish-flag-btn.flag-animating {
+        animation: flag-flash 0.22s ease forwards;
+    }
+    .finish-flag-btn.flag-complete {
+        background: var(--ready);
+        color: #0f172a;
+        box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.4), 0 6px 16px rgba(34, 197, 94, 0.45);
+    }
+    @keyframes flag-flash {
+        from { transform: scale(0.95); opacity: 0.9; }
+        to { transform: scale(1.05); opacity: 1; }
     }
     .items-more {
       margin-top: 0.35rem;
@@ -1063,13 +1114,36 @@
       }
     }
 
-    window.cancelOrder = function(orderNumber) {
+      window.cancelOrder = function(orderNumber) {
       const o = orders[orderNumber];
       if (!o) return;
       o.status = "done";
       sendMessage({ type: "ORDER_CANCELLED", orderNumber: orderNumber });
       selectedOrderNumber = null;
       render();
+    }
+
+    window.finishOrder = function(orderNumber, event) {
+      if (event) event.stopPropagation();
+
+      const o = orders[orderNumber];
+      if (!o || o.status === "done") return;
+
+      const button = event?.currentTarget;
+      if (button) {
+        button.classList.add('flag-animating', 'flag-complete');
+        button.textContent = 'ALL DONE';
+        button.disabled = true;
+      }
+
+      setTimeout(() => {
+        const targetOrder = orders[orderNumber];
+        if (!targetOrder) return;
+        targetOrder.status = "done";
+        selectedOrderNumber = null;
+        sendMessage({ type: "ORDER_COMPLETED", orderNumber });
+        render();
+      }, 200);
     }
 
     function addOrUpdate(orderNumber, status, data = {}) {
@@ -1436,22 +1510,33 @@
              ? `<button class="priority-star-btn ${o.isPrioritized ? 'is-prioritized' : ''}" aria-label="Toggle priority" onclick="window.togglePriority('${o.orderNumber}', event)">★</button>`
              : `<span class="priority-star-btn ${o.isPrioritized ? 'is-prioritized passive-star' : 'priority-placeholder'}">★</span>`;
 
-          const prioritySectionHtml = canPrioritize
-            ? `<div class="priority-section" onclick="window.togglePriority('${o.orderNumber}', event)">
-                ${priorityBtn}
-              </div>`
-            : `<div class="priority-section disabled">
-                ${priorityBtn}
-              </div>`;
+          const finishButtonLabel = o.status === 'done' ? 'ALL DONE' : '🏁';
+          const finishButtonClasses = `finish-flag-btn ${o.status === 'done' ? 'flag-complete' : ''}`;
+          const finishButtonDisabled = o.status === 'done' ? 'disabled' : '';
+          const finishButtonHtml = `<button class="${finishButtonClasses}" ${finishButtonDisabled} onclick="window.finishOrder('${o.orderNumber}', event)">${finishButtonLabel}</button>`;
 
           const timerHtml = `${formatTimeElapsed(o.createdAt)}`;
 
           const diningOption = escapeHtml(o.diningOption || "");
           const rawNotes = typeof o.notes === "string" ? o.notes.trim() : "";
           const notes = rawNotes ? renderMultilineText(rawNotes) : "";
-          
+
           const itemsHtml = renderItemsHtml(o.orderNumber, o.items, 99);
-          
+
+          const footerHtml = `
+            <div class="bubble-footer">
+              ${notes ? `<div class="bubble-notes">${notes}</div>` : ``}
+              <div class="bubble-footer-actions">
+                <div class="footer-left ${canPrioritize ? '' : 'disabled'}">
+                  ${priorityBtn}
+                </div>
+                <div class="footer-right">
+                  ${finishButtonHtml}
+                </div>
+              </div>
+            </div>
+          `;
+
           b.innerHTML = `
             <div class="bubble-top-bar ${displayStatus !== 'ready' ? displayStatus : ''}">
               <div class="bubble-top-left">
@@ -1480,8 +1565,7 @@
                   ${itemsHtml}
                 </div>
             </div>
-            ${notes ? `<div class="bubble-footer"><div class="bubble-notes">${notes}</div></div>` : ``}
-            ${prioritySectionHtml}
+            ${footerHtml}
           `;
 
           bubbleContainer.appendChild(b);
