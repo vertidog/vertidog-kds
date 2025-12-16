@@ -24,6 +24,7 @@
       --header-bg: rgba(15, 23, 42, 0.9);
       --header-border: rgba(148, 163, 184, 0.25);
       --header-text: #fff;
+      --header-height: 4.5rem;
       
       /* Time Alert Colors */
       --time-alert: #ffeb3b;   /* Bright Yellow */
@@ -74,6 +75,12 @@
       left: 0; 
       width: 100%;
       color: var(--header-text);
+    }
+    .header-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex: 0 0 auto;
     }
     header .brand {
       display: flex;
@@ -189,11 +196,11 @@
     --------------------------------*/
     main {
       flex: 1; /* Make main take up all remaining vertical space */
-      padding: 4.5rem 0.9rem 0.9rem 0.9rem;
-      overflow-x: scroll; 
-      overflow-y: hidden; 
+      padding: calc(var(--header-height) + 0.6rem) 0.9rem 0.9rem;
+      overflow-x: scroll;
+      overflow-y: hidden;
       min-height: 220px;
-      -webkit-overflow-scrolling: touch; 
+      -webkit-overflow-scrolling: touch;
       
       /* FIX: Default to horizontal flex layout for 1-row scrolling */
       display: flex; 
@@ -620,11 +627,65 @@
       background: #94a3b8;
       color: #334155;
     }
-    
-    @media (max-width: 860px) {
+
+    @media (max-width: 720px) {
+      header {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.75rem;
+      }
+      header .brand {
+        width: 100%;
+      }
+      header .status-tabs {
+        order: 3;
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 0.35rem;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      header .status-tabs::-webkit-scrollbar {
+        display: none;
+      }
+      header .tab-pill {
+        flex: 1 0 auto;
+        text-align: center;
+        padding: 0.25rem 0.65rem;
+        font-size: 0.95rem;
+      }
+      .header-actions {
+        margin-left: auto;
+      }
+      .header-clock {
+        position: static;
+        transform: none;
+        order: 4;
+        width: 100%;
+        text-align: center;
+        margin-top: -0.25rem;
+      }
+      main {
+        flex-direction: column;
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: calc(var(--header-height) + 0.4rem) 0.65rem 0.9rem;
+        gap: 0.75rem;
+      }
+      :root {
+        --card-width: 100%;
+      }
+      .bubble {
+        width: 100%;
+        min-width: 0;
+        flex: 0 0 auto;
+      }
+    }
+
+    @media (max-width: 860px) and (min-width: 721px) {
       header .subtitle { display: none; }
       :root {
-            --card-width: 320px; 
+            --card-width: 320px;
         }
     }
 
@@ -644,7 +705,7 @@
       <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
     </div>
     <div id="header-clock" class="header-clock" aria-label="Current time"></div>
-    <div style="display: flex; gap: 0.5rem; align-items: center;">
+    <div class="header-actions">
         <button class="icon-button" id="mute-toggle" aria-label="Toggle TTS mute" title="Mute TTS">
           🔊
         </button>
@@ -676,7 +737,9 @@
     const themeToggle = document.getElementById("theme-toggle");
     const readySound = document.getElementById("ready-sound");
     const headerClock = document.getElementById("header-clock");
-    
+    const headerEl = document.querySelector("header");
+    const rootEl = document.documentElement;
+
     const activeCountEl = document.getElementById("active-count");
     const doneCountEl = document.getElementById("done-count");
     const orders = {};
@@ -706,6 +769,19 @@
     if (storedMutePreference !== null) {
       ttsMuted = storedMutePreference === 'true';
     }
+
+    function syncHeaderHeight() {
+      if (!headerEl) return;
+      const height = headerEl.getBoundingClientRect().height;
+      rootEl.style.setProperty('--header-height', `${height}px`);
+    }
+
+    const headerObserver = new ResizeObserver(syncHeaderHeight);
+    if (headerEl) {
+      headerObserver.observe(headerEl);
+    }
+    window.addEventListener('resize', syncHeaderHeight);
+    syncHeaderHeight();
 
     // --- Utility Functions ---
 
