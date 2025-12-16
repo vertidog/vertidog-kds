@@ -538,7 +538,6 @@
         color: #fbbf24;
         font-size: 1.6rem;
         cursor: pointer;
-        transition: color 0.2s ease, transform 0.2s ease;
         padding: 0.2rem 0.4rem;
     }
     .priority-star-btn:hover { color: #fcd34d; transform: scale(1.05); }
@@ -554,12 +553,6 @@
         box-shadow: none;
         pointer-events: none;
     }
-
-    @keyframes priority-slide-left {
-        from { transform: translateX(70px); opacity: 0.5; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-
     .priority-section {
         display: flex;
         flex-direction: column;
@@ -576,11 +569,6 @@
         background: #ffd500;
         box-shadow: inset 0 0 0 2px #f59e0b, 0 4px 18px rgba(245, 158, 11, 0.35);
     }
-
-    .bubble.priority-boost {
-        animation: priority-slide-left 0.25s ease-out;
-    }
-
     .priority-section.disabled {
         cursor: default;
     }
@@ -676,7 +664,6 @@
     const activeCountEl = document.getElementById("active-count");
     const doneCountEl = document.getElementById("done-count");
     const orders = {};
-    const priorityBoosts = new Set();
     let socket;
     let selectedOrderNumber = null;
     let currentFilter = 'active';
@@ -983,9 +970,6 @@
                 orders[msg.orderNumber].prioritizedAt = msg.isPrioritized
                   ? (msg.prioritizedAt || Date.now())
                   : null;
-                if (msg.isPrioritized) {
-                    priorityBoosts.add(msg.orderNumber);
-                }
             }
             render();
             break;
@@ -1005,11 +989,6 @@
 
           o.isPrioritized = !o.isPrioritized;
           o.prioritizedAt = o.isPrioritized ? Date.now() : null;
-
-          if (o.isPrioritized) {
-              priorityBoosts.add(orderNumber);
-          }
-
           sendMessage({
               type: "ORDER_PRIORITY_TOGGLE",
               orderNumber: orderNumber,
@@ -1406,15 +1385,6 @@
           b.className = `bubble ${displayStatus}${o.isPrioritized ? " prioritized" : ""}${isSelected ? " selected" : ""}`;
           b.dataset.order = o.orderNumber;
           b.dataset.displayStatus = displayStatus;
-
-          if (priorityBoosts.has(o.orderNumber) && o.isPrioritized) {
-              b.classList.add('priority-boost');
-              b.addEventListener('animationend', () => {
-                  b.classList.remove('priority-boost');
-              }, { once: true });
-              priorityBoosts.delete(o.orderNumber);
-          }
-
           if (isActiveStatus) {
               b.onmousedown = handleLongPressStart;
               b.onmouseup = handlePressEnd;
