@@ -342,15 +342,16 @@ wss.on("connection", (ws) => {
 // ---------------- Middleware + static ----------------
 
 app.use(bodyParser.json());
-// Ensure your 'kitchen.html' is in a 'public' folder relative to this server.js
-app.use(express.static(path.join(__dirname, "public")));
+// Serve static assets from the repo's public directory (works even if the server is started elsewhere)
+const PUBLIC_DIR = path.join(process.cwd(), "public");
+app.use(express.static(PUBLIC_DIR));
 
 app.get("/kitchen", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "kitchen.html"));
+  res.sendFile(path.join(PUBLIC_DIR, "kitchen.html"));
 });
 
 app.get("/cds", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "cds.html"));
+  res.sendFile(path.join(PUBLIC_DIR, "cds.html"));
 });
 
 app.get("/", (req, res) => res.redirect("/kitchen"));
