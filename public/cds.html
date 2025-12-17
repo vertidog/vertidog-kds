@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VertiDog Customer Display</title>
-  <link rel="icon" type="image/svg+xml" href="/sausage-icon.svg" />
+  <link rel="icon" type="image/svg+xml" href="/palm-tree.svg" />
   <style>
     :root {
       --bg: radial-gradient(circle at 20% 20%, #0b1020 0, #050816 45%, #020511 100%);
@@ -36,6 +36,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 1rem;
       border: 1px solid var(--border);
       background: linear-gradient(120deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
       padding: 1rem 1.25rem;
@@ -49,6 +50,15 @@
       margin: 0;
       font-size: 1.05rem;
       font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .clock {
+      flex: 1;
+      text-align: center;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: #cbd5e1;
     }
 
     .status-pill {
@@ -171,6 +181,7 @@
 <body>
   <header>
     <h1>Customer Display</h1>
+    <div class="clock" id="clock">--:--:--</div>
     <div class="status-pill"><span class="dot"></span> Live</div>
   </header>
 
@@ -233,7 +244,6 @@
         const card = document.createElement('div');
         card.className = `order-card ${mode}`;
         const itemCountText = order.itemCount ? `${order.itemCount} item${order.itemCount > 1 ? 's' : ''}` : '';
-        const dining = order.diningOption ? `<span>${order.diningOption}</span>` : '';
         const time = formatTime(order.createdAt);
 
         card.innerHTML = `
@@ -241,12 +251,17 @@
           <div class="order-number">${order.orderNumber || order.orderId}</div>
           <div class="meta">
             ${itemCountText ? `<span>${itemCountText}</span>` : ''}
-            ${dining}
             ${time ? `<span>${time}</span>` : ''}
           </div>
         `;
         target.appendChild(card);
       });
+    }
+
+    function updateClock() {
+      const clock = document.getElementById('clock');
+      if (!clock) return;
+      clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
     function shouldShowReady(order) {
@@ -286,6 +301,8 @@
 
     fetchAndRender();
     setInterval(fetchAndRender, POLL_MS);
+    updateClock();
+    setInterval(updateClock, 1000);
   </script>
 </body>
 </html>
