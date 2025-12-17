@@ -150,6 +150,32 @@ async function fetchOrderFromSquare(orderId) {
   }
 }
 
+// Utility to locate orders by either internal ID or display number
+function findOrderByIdentifier(idOrNumber) {
+  if (!idOrNumber) return null;
+  if (orders[idOrNumber]) return orders[idOrNumber];
+  return (
+    Object.values(orders).find((o) => o.orderNumber === idOrNumber) || null
+  );
+}
+
+function markOrderReady(order) {
+  if (!order) return null;
+  order.status = "ready";
+  if (Array.isArray(order.items)) {
+    order.items = order.items.map((item) => ({ ...item, completed: true }));
+  }
+  orders[order.orderId] = order;
+  saveKDSState();
+
+  const payload = {
+    type: "ORDER_READY_CONFIRM",
+    orderNumber: order.orderNumber,
+  };
+  broadcast(payload);
+  return order;
+}
+
 // ---------------- HTTP + WebSocket server ----------------
 
 const server = http.createServer(app);
@@ -198,9 +224,7 @@ wss.on("connection", (ws) => {
               
               // If all items are complete, transition the order status to ready
               if (data.allCompleted) {
-                  order.status = 'ready';
-                  saveKDSState();
-                  broadcast({ type: 'ORDER_READY_CONFIRM', orderNumber: data.orderNumber });
+                  markOrderReady(order);
               } else {
                   saveKDSState();
                   broadcast({
@@ -245,19 +269,9 @@ wss.on("connection", (ws) => {
         );
 
         if (orderToMark) {
-          // Update the in-memory status
-          orderToMark.status = "ready";
-          orderToMark.items.forEach(item => item.completed = true); // Mark all items complete
-          orders[orderToMark.orderId] = orderToMark; 
-          saveKDSState(); // Save state
-          
-          // Broadcast confirmation back to ALL clients
-          broadcast({
-            type: "ORDER_READY_CONFIRM",
-            orderNumber: orderToMark.orderNumber,
-          });
+          markOrderReady(orderToMark);
         }
-      } 
+      }
       
       // KDS FEATURE: Order marked Completed (done)
       else if (data.type === "ORDER_COMPLETED" && data.orderNumber) {
@@ -326,19 +340,43 @@ wss.on("connection", (ws) => {
 
 app.use(bodyParser.json());
 // Ensure your 'kitchen.html' is in a 'public' folder relative to this server.js
-app.use(express.static(path.join(__dirname, "public"))); 
+app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/kitchen", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "kitchen.html"));
+});
+
+app.get("/cds", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "cds.html"));
 });
 
 app.get("/", (req, res) => res.redirect("/kitchen"));
 
 app.get("/healthz", (req, res) => res.status(200).send("OK"));
 
+// ---------------- API Routes ----------------
+
+app.get("/api/orders", (req, res) => {
+  const list = Object.values(orders)
+    .map((o) => ({ ...o, status: normalizeStatus(o.status) }))
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+  res.json({ orders: list });
+});
+
+app.post("/api/orders/:id/ready", (req, res) => {
+  const order = findOrderByIdentifier(req.params.id);
+  if (!order) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  const updated = markOrderReady(order);
+  res.json({ success: true, order: updated });
+});
+
 // ---------------- Square Webhook ----------------
 
-app.post("/square/webhook", async (req, res) => {
+async function handleSquareWebhook(req, res) {
   try {
     const body = req.body || {};
     console.log("🔔 Square Webhook Received:", JSON.stringify(body));
@@ -494,7 +532,10 @@ app.post("/square/webhook", async (req, res) => {
     // 200 so Square doesn’t spam retries while we debug
     return res.status(200).send("error");
   }
-});
+}
+
+app.post("/square/webhook", handleSquareWebhook); // Legacy route
+app.post("/webhooks/square", handleSquareWebhook);
 
 // ---------------- Test endpoint ----------------
 

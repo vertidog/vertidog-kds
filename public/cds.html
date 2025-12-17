@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VertiDog Customer Display</title>
+  <link rel="icon" type="image/svg+xml" href="/sausage-icon.svg" />
+  <style>
+    :root {
+      --bg: radial-gradient(circle at 20% 20%, #111827 0, #0b1020 30%, #050816 70%);
+      --panel: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --ready: #22c55e;
+      --prep: #38bdf8;
+      --card: rgba(15, 23, 42, 0.6);
+      --card-border: rgba(255, 255, 255, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 1.25rem;
+      gap: 1.25rem;
+    }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      padding: 1rem 1.25rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.4rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    header .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    .last-updated {
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      flex: 1;
+    }
+
+    section.panel {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.35);
+      min-height: 60vh;
+    }
+
+    .panel h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.1rem;
+      letter-spacing: 0.03em;
+    }
+
+    .pill {
+      padding: 0.15rem 0.65rem;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: #020617;
+    }
+
+    .pill.prep { background: var(--prep); }
+    .pill.ready { background: var(--ready); }
+
+    .orders-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      flex: 1;
+    }
+
+    .order-card {
+      border: 1px solid var(--card-border);
+      background: var(--card);
+      border-radius: 12px;
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .order-number {
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.95rem;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .empty {
+      color: var(--muted);
+      border: 1px dashed var(--border);
+      padding: 1rem;
+      border-radius: 12px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>VertiDog Customer Display</h1>
+      <p class="subtitle">Order status for our guests</p>
+    </div>
+    <div class="last-updated" id="last-updated">Loading…</div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2><span class="pill prep">PREPARING</span> Orders in progress</h2>
+      <div class="orders-grid" id="preparing-list"></div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="pill ready">READY</span> Pick up now</h2>
+      <div class="orders-grid" id="ready-list"></div>
+    </section>
+  </main>
+
+  <script>
+    const PREPARING_EL = document.getElementById('preparing-list');
+    const READY_EL = document.getElementById('ready-list');
+    const LAST_UPDATED_EL = document.getElementById('last-updated');
+    const POLL_MS = 2500;
+
+    function normalizeStatus(status) {
+      if (!status) return 'new';
+      const lower = String(status).toLowerCase();
+      if (['cancelled', 'canceled', 'completed'].includes(lower)) return 'done';
+      return lower;
+    }
+
+    function formatTime(ts) {
+      if (!ts) return '';
+      try {
+        return new Date(Number(ts)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function renderList(target, orders, emptyText) {
+      target.innerHTML = '';
+      if (!orders.length) {
+        target.innerHTML = `<div class="empty">${emptyText}</div>`;
+        return;
+      }
+
+      orders.forEach(order => {
+        const card = document.createElement('div');
+        card.className = 'order-card';
+        const itemCountText = order.itemCount ? `${order.itemCount} item${order.itemCount > 1 ? 's' : ''}` : '';
+        const dining = order.diningOption ? `<span>${order.diningOption}</span>` : '';
+        const time = formatTime(order.createdAt);
+
+        card.innerHTML = `
+          <div class="order-number">${order.orderNumber || order.orderId}</div>
+          <div class="meta">
+            ${itemCountText ? `<span>${itemCountText}</span>` : ''}
+            ${dining}
+            ${time ? `<span>${time}</span>` : ''}
+          </div>
+        `;
+        target.appendChild(card);
+      });
+    }
+
+    async function fetchAndRender() {
+      try {
+        const res = await fetch('/api/orders');
+        if (!res.ok) throw new Error('Failed to load orders');
+        const data = await res.json();
+        const orders = Array.isArray(data.orders) ? data.orders : [];
+        const normalized = orders.map(o => ({ ...o, status: normalizeStatus(o.status) }));
+
+        const preparing = normalized
+          .filter(o => o.status !== 'ready' && o.status !== 'done')
+          .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        const ready = normalized
+          .filter(o => o.status === 'ready')
+          .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+        renderList(PREPARING_EL, preparing, 'Waiting for new orders…');
+        renderList(READY_EL, ready, 'No ready orders yet.');
+        LAST_UPDATED_EL.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        console.error(err);
+        LAST_UPDATED_EL.textContent = 'Unable to refresh orders';
+      }
+    }
+
+    fetchAndRender();
+    setInterval(fetchAndRender, POLL_MS);
+  </script>
+</body>
+</html>
