@@ -50,6 +50,8 @@ function loadKDSState() {
                 }));
             }
             order.isPrioritized = order.isPrioritized ?? false;
+            const readyTs = Number(order.readyAt);
+            order.readyAt = Number.isFinite(readyTs) ? readyTs : null;
         }
         Object.assign(orders, loadedOrders);
         console.log(`Loaded KDS state from ${STATE_FILE}`);
@@ -162,6 +164,7 @@ function findOrderByIdentifier(idOrNumber) {
 function markOrderReady(order) {
   if (!order) return null;
   order.status = "ready";
+  order.readyAt = Date.now();
   if (Array.isArray(order.items)) {
     order.items = order.items.map((item) => ({ ...item, completed: true }));
   }
