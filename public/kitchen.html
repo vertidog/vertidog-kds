@@ -766,6 +766,8 @@
     let preferredVoice = null;
     let announcementQueue = [];
     let isAnnouncing = false;
+    let announcementSessionDepth = 0;
+    let mutedMediaSnapshot = [];
     let ttsMuted = false;
     function getTimeBasedTheme() {
       const hour = new Date().getHours();
@@ -925,6 +927,8 @@
       if (ttsMuted) {
         announcementQueue = [];
         isAnnouncing = false;
+        announcementSessionDepth = 0;
+        endAnnouncementSession();
         try {
           readySound.pause();
           readySound.currentTime = 0;
@@ -962,6 +966,47 @@
       return msg;
     }
 
+    function beginAnnouncementSession() {
+      announcementSessionDepth += 1;
+      if (announcementSessionDepth > 1) return;
+
+      const mediaEls = Array.from(document.querySelectorAll('audio, video'));
+      mutedMediaSnapshot = mediaEls
+        .filter((el) => el !== readySound)
+        .map((el) => ({
+          el,
+          muted: el.muted,
+          volume: el.volume,
+          paused: el.paused,
+          currentTime: el.currentTime,
+        }));
+
+      mutedMediaSnapshot.forEach((entry) => {
+        try {
+          entry.el.muted = true;
+          entry.el.volume = 0;
+        } catch (e) {}
+      });
+    }
+
+    function endAnnouncementSession() {
+      announcementSessionDepth = Math.max(announcementSessionDepth - 1, 0);
+      if (announcementSessionDepth > 0) return;
+
+      mutedMediaSnapshot.forEach((entry) => {
+        if (!entry?.el) return;
+        try {
+          entry.el.muted = entry.muted;
+          entry.el.volume = entry.volume;
+          if (!entry.paused) {
+            entry.el.currentTime = entry.currentTime;
+            entry.el.play().catch(() => {});
+          }
+        } catch (e) {}
+      });
+      mutedMediaSnapshot = [];
+    }
+
     function queueAnnouncement(orderNumber) {
       if (ttsMuted) return;
       announcementQueue.push(orderNumber);
@@ -980,17 +1025,32 @@
       }
       isAnnouncing = true;
       const orderNumber = announcementQueue.shift();
+      beginAnnouncementSession();
 
       const doTTS = () => {
         const utterance = announceOrder(orderNumber);
-        if (utterance) utterance.onend = () => playNextAnnouncement();
-        else playNextAnnouncement();
+        if (utterance) {
+          utterance.onend = () => {
+            endAnnouncementSession();
+            playNextAnnouncement();
+          };
+          utterance.onerror = () => {
+            endAnnouncementSession();
+            playNextAnnouncement();
+          };
+        } else {
+          endAnnouncementSession();
+          playNextAnnouncement();
+        }
       };
 
       try {
         readySound.currentTime = 0;
         readySound.onended = () => { readySound.onended = null; doTTS(); };
-        readySound.play().catch(() => { readySound.onended = null; doTTS(); });
+        readySound.play().catch(() => {
+          readySound.onended = null;
+          doTTS();
+        });
       } catch (e) {
         doTTS();
       }
