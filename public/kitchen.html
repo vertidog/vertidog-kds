@@ -182,13 +182,13 @@
     }
 
     .header-clock {
-      position: absolute;
-      left: 50%;
-      transform: translateX(-50%);
       font-weight: 800;
       letter-spacing: 0.06em;
       font-variant-numeric: tabular-nums;
       pointer-events: none;
+      font-size: 0.95rem;
+      min-width: 6.2rem;
+      text-align: right;
     }
 
     /* -----------------------------
@@ -279,14 +279,14 @@
     .bubble-top-bar {
         background: var(--new); /* Default blue, will change based on time */
         color: white;
-        padding: 0.55rem 0.85rem;
+        padding: 0.45rem 0.75rem;
         border-radius: var(--radius) var(--radius) 0 0;
         display: flex;
         justify-content: space-between;
         gap: 0.75rem;
         align-items: center;
         font-weight: 700;
-        font-size: 1.05rem;
+        font-size: 0.95rem;
         text-align: left;
     }
 
@@ -302,7 +302,7 @@
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        font-size: 1rem;
+        font-size: 0.9rem;
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -327,7 +327,7 @@
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.2);
         color: #fff;
-        font-size: 0.85rem;
+        font-size: 0.78rem;
         letter-spacing: 0.03em;
         line-height: 1.1;
         white-space: nowrap;
@@ -355,10 +355,10 @@
     .bubble-body {
         flex: 1;
         min-height: 0;
-        padding: 0.85rem 0.9rem 0.85rem;
+        padding: 0.65rem 0.75rem 0.7rem;
         display: flex;
         flex-direction: column;
-        gap: 0.65rem;
+        gap: 0.45rem;
         text-align: left;
     }
     
@@ -410,14 +410,14 @@
       flex: 0 0 auto;
     }
     .bubble-timer {
-      font-size: 0.95rem;
+      font-size: 0.85rem;
       font-weight: 800;
       color: var(--time-default); /* New dark color for timer text */
       line-height: 1.05;
       letter-spacing: 0.02em;
     }
     .bubble-meta {
-      font-size: 1rem;
+      font-size: 0.88rem;
       color: var(--muted);
       font-weight: 650;
       letter-spacing: 0.01em;
@@ -426,10 +426,10 @@
     .bubble-items {
       flex: 1;
       border-top: 1px solid rgba(148, 163, 184, 0.35);
-      padding-top: 0.6rem;
+      padding-top: 0.45rem;
       display: flex;
       flex-direction: column;
-      gap: 0.55rem;
+      gap: 0.35rem;
       overflow-y: auto;
       padding-bottom: 0.1rem;
     }
@@ -443,7 +443,7 @@
       justify-content: space-between;
       gap: 0.75rem;
       cursor: pointer; /* Enable clicking item for completion */
-      padding: 0.2rem 0;
+      padding: 0.14rem 0;
     }
     .item-row:hover .item-name {
         color: var(--accent);
@@ -466,7 +466,7 @@
       min-width: 0;
     }
     .item-name {
-      font-size: 1.35rem;
+      font-size: 1.12rem;
       font-weight: 850;
       color: var(--card-text);
       overflow: hidden;
@@ -476,7 +476,7 @@
       transition: color 0.2s;
     }
     .item-variant {
-      font-size: 1rem;
+      font-size: 0.86rem;
       color: var(--muted);
       font-weight: 700;
       overflow: hidden;
@@ -487,9 +487,9 @@
         color: var(--muted);
     }
     .item-qty {
-      font-size: 1.05rem;
+      font-size: 0.9rem;
       font-weight: 800;
-      padding: 0.12rem 0.45rem;
+      padding: 0.1rem 0.38rem;
       border-radius: 999px;
       border: 1px solid rgba(168, 85, 247, 0.35);
       background: rgba(168, 85, 247, 0.12);
@@ -516,7 +516,7 @@
 
     .item-mods {
       margin-top: 0.15rem;
-      font-size: 1.05rem;
+      font-size: 0.9rem;
       color: var(--ready); /* Green for Modifiers */
       font-style: italic;
       line-height: 1.2;
@@ -525,7 +525,7 @@
     }
     .item-note {
       margin-top: 0.15rem;
-      font-size: 1.02rem;
+      font-size: 0.88rem;
       color: var(--muted);
       font-style: italic;
       line-height: 1.2;
@@ -669,14 +669,7 @@
       .header-actions {
         margin-left: auto;
       }
-      .header-clock {
-        position: static;
-        transform: none;
-        order: 4;
-        width: 100%;
-        text-align: center;
-        margin-top: -0.25rem;
-      }
+      .header-clock { display: none; }
       main {
         flex-direction: column;
         overflow-x: hidden;
@@ -716,8 +709,8 @@
       <div class="tab-pill active-tab" data-filter="active" onclick="setFilter('active')">ACTIVE (<span id="active-count">0</span>)</div>
       <div class="tab-pill" data-filter="done" onclick="setFilter('done')">COMPLETED (<span id="done-count">0</span>)</div>
     </div>
-    <div id="header-clock" class="header-clock" aria-label="Current time"></div>
     <div class="header-actions">
+        <div id="header-clock" class="header-clock" aria-label="Current time"></div>
         <button class="icon-button" id="mute-toggle" aria-label="Toggle TTS mute" title="Mute TTS">
           🔊
         </button>
@@ -810,6 +803,43 @@
 
     function renderMultilineText(text) {
       return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    function abbreviateMenuText(value) {
+      const raw = String(value ?? "").trim();
+      if (!raw) return raw;
+
+      const normalized = raw.replace(/\s+/g, " ").trim();
+      const lower = normalized.toLowerCase();
+
+      const baseMap = [
+        { key: "pulled pork", abbr: "PORK" },
+        { key: "pink velvet", abbr: "PINK" },
+        { key: "tropical", abbr: "TROP" },
+        { key: "seattle", abbr: "SEA" },
+        { key: "veggie", abbr: "VEG" },
+        { key: "cheese", abbr: "CHEESE" },
+        { key: "original", abbr: "ORIG" }
+      ];
+
+      const comboMatch = lower.includes("combo");
+      const matchedType = baseMap.find(({ key }) => lower.includes(key))?.abbr || "";
+
+      if (comboMatch) {
+        return matchedType ? `COMBO ${matchedType}` : "COMBO";
+      }
+
+      if (/(vertidog)/i.test(normalized)) {
+        return matchedType ? `VD ${matchedType}` : normalized.replace(/vertidog/ig, "VD");
+      }
+
+      if (/(vertifries)/i.test(normalized)) {
+        return matchedType ? `VF ${matchedType}` : normalized.replace(/vertifries/ig, "VF");
+      }
+
+      return normalized
+        .replace(/vertidog/ig, "VD")
+        .replace(/vertifries/ig, "VF");
     }
 
     function toTimestamp(value) {
@@ -1452,7 +1482,8 @@
 
       const slice = items.slice(0, maxItems);
       const rows = slice.map((item, index) => {
-        const name = escapeHtml(item?.name || "Item");
+        const displayName = abbreviateMenuText(item?.name || "Item");
+        const name = escapeHtml(displayName);
         const qty = Number(item?.quantity ?? 1);
         const variant = escapeHtml(item?.variationName || "");
         const mods = Array.isArray(item?.modifiers) ? item.modifiers.filter(Boolean) : [];
