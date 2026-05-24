@@ -77,6 +77,54 @@ function saveKDSState() {
 
 loadKDSState(); // Call on startup
 
+function toThreeDigitOrderNumber(num) {
+  const normalized = ((Number(num) - 1 + 999) % 999) + 1;
+  return String(normalized).padStart(3, "0");
+}
+
+function extractThreeDigitOrderNumber(value) {
+  if (value === undefined || value === null) return null;
+  const match = String(value).match(/\b(\d{3})\b/);
+  if (!match) return null;
+  const n = Number(match[1]);
+  return Number.isFinite(n) && n >= 1 && n <= 999 ? n : null;
+}
+
+function getHighestAssignedOrderNumber() {
+  let max = 0;
+  for (const order of Object.values(orders)) {
+    const numeric = extractThreeDigitOrderNumber(order?.orderNumber);
+    if (numeric && numeric > max) max = numeric;
+  }
+  return max;
+}
+
+let liveOrderCounter = getHighestAssignedOrderNumber();
+
+function getNextLiveOrderNumber() {
+  liveOrderCounter = (liveOrderCounter % 999) + 1;
+  return toThreeDigitOrderNumber(liveOrderCounter);
+}
+
+function normalizeDiningOption(rawDiningOption, rawFulfillmentType) {
+  const joined = [rawDiningOption, rawFulfillmentType]
+    .filter(Boolean)
+    .map((v) => String(v).trim().toUpperCase())
+    .join(" ");
+
+  if (!joined) return null;
+
+  if (joined.includes("TO GO") || joined.includes("TO_GO") || joined.includes("TAKEOUT") || joined.includes("PICKUP") || joined.includes("CURBSIDE") || joined.includes("DELIVERY") || joined.includes("SHIPMENT")) {
+    return "TO GO";
+  }
+
+  if (joined.includes("FOR HERE") || joined.includes("DINE IN") || joined.includes("DINE-IN") || joined.includes("IN STORE") || joined.includes("IN_STORE") || joined.includes("EAT IN") || joined.includes("EAT-IN")) {
+    return "FOR HERE";
+  }
+
+  return String(rawDiningOption || rawFulfillmentType || "").trim() || null;
+}
+
 // ---------------- KDS SEQUENTIAL COUNTER (FOR TEST ENDPOINT ONLY) ----------------
 // This counter is only used by the /test-order endpoint to simulate clean Square numbers
 let testOrderCounter = 0; 
@@ -86,8 +134,7 @@ function getNextTestTicketNumber() {
     if (testOrderCounter > 999) {
         testOrderCounter = 1; // Reset to 001 after 999
     }
-    // Format to 3 digits (e.g., 1 -> "001")
-    return String(testOrderCounter).padStart(3, '0'); 
+    return toThreeDigitOrderNumber(testOrderCounter);
 }
 // ---------------- End Test Counter ----------------
 
@@ -422,18 +469,11 @@ async function handleSquareWebhook(req, res) {
       }
     }
 
-    // ---------- ORDER NUMBER (Pulls Square's Display ID) ----------
-    let orderNumber = null;
-    if (fullOrder) {
-      // Prioritize Square's display fields (ticket_name, display_id, etc.)
-      orderNumber =
-        fullOrder.ticket_name ||
-        fullOrder.order_number ||
-        fullOrder.display_id || // <--- This is the key display number
-        fullOrder.receipt_number ||
-        (fullOrder.id ? fullOrder.id.slice(-6).toUpperCase() : null);
-    } else {
-      orderNumber = orderId.slice(-6).toUpperCase();
+    // ---------- ORDER NUMBER (3-digit KDS display: 001-999) ----------
+    const existing = orders[orderId] || {};
+    let orderNumber = existing.orderNumber || null;
+    if (!orderNumber) {
+      orderNumber = getNextLiveOrderNumber();
     }
     // ---------- END ORDER NUMBER ASSIGNMENT ----------
 
@@ -455,7 +495,6 @@ async function handleSquareWebhook(req, res) {
     }
     
     // Get existing state for merge
-    const existing = orders[orderId] || {};
     if (existing.status) existing.status = normalizeStatus(existing.status);
 
     // --- ITEM COMPLETION & PRIORITY PERSISTENCE ---
@@ -481,9 +520,10 @@ async function handleSquareWebhook(req, res) {
     );
 
     const fulfillment = Array.isArray(fullOrder?.fulfillments) ? fullOrder.fulfillments[0] : null;
+    const rawDiningOption = (fullOrder?.dining_option && fullOrder.dining_option.name) || null;
+    const rawFulfillmentType = fulfillment?.type || null;
     const diningOption =
-      (fullOrder?.dining_option && fullOrder.dining_option.name) ||
-      (fulfillment?.type || null) ||
+      normalizeDiningOption(rawDiningOption, rawFulfillmentType) ||
       existing.diningOption ||
       null;
 
